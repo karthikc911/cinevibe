@@ -1,0 +1,35 @@
+name: Keep Supabase Active
+
+on:
+  # Run every 3 days at 9 AM UTC
+  schedule:
+    - cron: '0 9 */3 * *'
+  
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Ping Supabase database
+        run: npm run db:ping
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      
+      - name: Log success
+        run: echo "✅ Successfully pinged Supabase at $(date)"
+
