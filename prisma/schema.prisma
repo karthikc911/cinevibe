@@ -1,0 +1,319 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id                String          @id @default(cuid())
+  name              String?
+  email             String?         @unique
+  emailVerified     DateTime?
+  password          String?         // Hashed password for email/password signup
+  image             String?
+  age               Int?
+  languages         String[]        // Array of preferred languages
+  genres            String[]        // Array of preferred genres
+  moviePreference   String?         // User's movie taste/preference description
+  aiInstructions    String?         // AI recommendation instructions (e.g., "trending from past 6 months")
+  signupMethod      String?         // "email" or "oauth" to track signup method
+  onboardingComplete Boolean        @default(false) // Track if user completed onboarding
+  
+  // AI Recommendation Filter Preferences
+  recCount          Int?            // Number of recommendations to generate (default 10)
+  recYearFrom       Int?            // Filter: minimum year (e.g., 2020)
+  recYearTo         Int?            // Filter: maximum year (e.g., 2024)
+  recMinImdb        Float?          // Filter: minimum IMDB rating (e.g., 7.0)
+  recMinBoxOffice   BigInt?         // Filter: minimum box office in USD
+  recMaxBudget      BigInt?         // Filter: maximum budget in USD
+  
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  
+  accounts                Account[]
+  sessions                Session[]
+  ratings                 MovieRating[]
+  tvShowRatings           TvShowRating[]
+  preferences             UserPreference[]
+  watchlist               WatchlistItem[]
+  tvShowWatchlist         TvShowWatchlistItem[]
+  recommendations         UserRecommendation[]
+  sentFriendRequests      Friendship[]           @relation("SentRequests")
+  receivedFriendRequests  Friendship[]           @relation("ReceivedRequests")
+  sentMovieRecommendations FriendMovieRecommendation[] @relation("SentMovieRecommendations")
+  receivedMovieRecommendations FriendMovieRecommendation[] @relation("ReceivedMovieRecommendations")
+  recommendationComments  RecommendationComment[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model MovieRating {
+  id        String   @id @default(cuid())
+  userId    String
+  movieId   Int
+  movieTitle String
+  movieYear  String?
+  rating    String   // "awful", "good", "amazing", "not-seen"
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, movieId])
+  @@index([userId])
+}
+
+model WatchlistItem {
+  id        String   @id @default(cuid())
+  userId    String
+  movieId   Int
+  movieTitle String
+  movieYear  String?
+  addedAt   DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, movieId])
+  @@index([userId])
+}
+
+model UserPreference {
+  id             String                      @id @default(cuid())
+  userId         String
+  preferenceType String                      // "genre", "actor", "director", "theme", etc.
+  value          String
+  strength       Float                       @default(1.0) // How strong this preference is (0-1)
+  embedding      Unsupported("vector(1536)") // Vector embedding for RAG (OpenAI embedding dimension)
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  
+  user           User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([preferenceType])
+}
+
+model Movie {
+  id                    Int      @id  // TMDB movie ID or generated ID for non-TMDB movies
+  title                 String
+  originalTitle         String?
+  overview              String?  @db.Text
+  posterPath            String?
+  backdropPath          String?
+  releaseDate           String?
+  year                  Int?
+  voteAverage           Float?
+  voteCount             Int?
+  popularity            Float?
+  language              String   // ISO 639-1 code (e.g., "en", "hi", "es")
+  genres                String[] // Array of genre names
+  runtime               Int?     // in minutes
+  tagline               String?
+  imdbRating            Float?   // IMDB rating (0-10)
+  imdbVoterCount        Int?     // IMDB total voter count
+  userReviewSummary     String?  @db.Text // AI-generated 2-line summary of IMDB user reviews
+  rtRating              Int?     // Rotten Tomatoes score
+  budget                BigInt?  // Production budget in USD
+  boxOffice             BigInt?  // Worldwide box office collection in USD
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([language])
+  @@index([voteAverage])
+  @@index([voteCount])
+  @@index([popularity])
+  @@index([imdbRating])
+}
+
+model UserRecommendation {
+  id              String   @id @default(cuid())
+  userId          String
+  movieId         Int
+  batchId         String   // Groups recommendations from same generation
+  position        Int      // Order in the batch (1-50)
+  shown           Boolean  @default(false) // Has this been shown to user?
+  rated           Boolean  @default(false) // Has user rated this movie?
+  reason          String?  @db.Text // Why this was recommended
+  matchPercentage Int?     // AI-generated match score (0-100)
+  createdAt       DateTime @default(now())
+  
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, movieId, batchId])
+  @@index([userId, shown, rated])
+  @@index([batchId])
+}
+
+model Friendship {
+  id         String   @id @default(cuid())
+  requesterId String  // User who sent the friend request
+  addresseeId String  // User who received the friend request
+  status     String   // "pending", "accepted", "rejected", "blocked"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  requester  User     @relation("SentRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee  User     @relation("ReceivedRequests", fields: [addresseeId], references: [id], onDelete: Cascade)
+  
+  @@unique([requesterId, addresseeId])
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@index([status])
+}
+
+model FriendMovieRecommendation {
+  id           String   @id @default(cuid())
+  senderId     String   // User who recommended the movie
+  receiverId   String   // User who received the recommendation
+  movieId      Int
+  movieTitle   String
+  movieYear    Int?
+  message      String?  @db.Text // Optional message with the recommendation
+  seen         Boolean  @default(false) // Has the receiver seen this?
+  acknowledged Boolean  @default(false) // Has the receiver taken action (watchlist/rated/dismissed)?
+  createdAt    DateTime @default(now())
+  
+  sender      User     @relation("SentMovieRecommendations", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ReceivedMovieRecommendations", fields: [receiverId], references: [id], onDelete: Cascade)
+  comments    RecommendationComment[]
+  
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([receiverId, seen])
+  @@index([receiverId, acknowledged])
+}
+
+model RecommendationComment {
+  id              String   @id @default(cuid())
+  recommendationId String  // FriendMovieRecommendation this comment belongs to
+  userId          String   // User who wrote the comment
+  parentId        String?  // For threaded replies (null if top-level comment)
+  content         String   @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  recommendation  FriendMovieRecommendation @relation(fields: [recommendationId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent          RecommendationComment?    @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies         RecommendationComment[]   @relation("CommentReplies")
+  
+  @@index([recommendationId])
+  @@index([userId])
+  @@index([parentId])
+}
+
+// TV Show Models
+model TvShow {
+  id                    Int      @id  // TMDB TV show ID
+  name                  String   // TV show name
+  originalName          String?
+  overview              String?  @db.Text
+  posterPath            String?
+  backdropPath          String?
+  firstAirDate          String?
+  year                  Int?     // Year of first air date
+  voteAverage           Float?
+  voteCount             Int?
+  popularity            Float?
+  language              String   // ISO 639-1 code (e.g., "en", "hi", "es")
+  genres                String[] // Array of genre names
+  numberOfSeasons       Int?
+  numberOfEpisodes      Int?
+  episodeRunTime        Int[]    // Array of typical episode runtimes in minutes
+  status                String?  // "Returning Series", "Ended", "Canceled", etc.
+  tagline               String?
+  imdbRating            Float?   // IMDB rating (0-10)
+  imdbVoterCount        Int?     // IMDB total voter count
+  userReviewSummary     String?  @db.Text // AI-generated 2-line summary
+  rtRating              Int?     // Rotten Tomatoes score
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  @@index([language])
+  @@index([voteAverage])
+  @@index([voteCount])
+  @@index([popularity])
+  @@index([imdbRating])
+}
+
+model TvShowRating {
+  id         String   @id @default(cuid())
+  userId     String
+  tvShowId   Int
+  tvShowName String
+  tvShowYear Int?
+  rating     String   // "awful", "good", "amazing", "not-seen"
+  createdAt  DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, tvShowId])
+  @@index([userId])
+}
+
+model TvShowWatchlistItem {
+  id         String   @id @default(cuid())
+  userId     String
+  tvShowId   Int
+  tvShowName String
+  tvShowYear Int?
+  addedAt    DateTime @default(now())
+  
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, tvShowId])
+  @@index([userId])
+}
+
+// Daily cache for trending and popular content
+model DailyTrendingCache {
+  id          String   @id @default(cuid())
+  date        DateTime @default(now()) @db.Date // Date this cache was created
+  contentType String   // "movie" or "tvshow"
+  category    String   // "trending_day", "trending_week", "popular"
+  items       Json     // Array of movie/tvshow IDs
+  createdAt   DateTime @default(now())
+  
+  @@unique([date, contentType, category])
+  @@index([date, contentType, category])
+}
