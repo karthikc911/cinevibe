@@ -19,7 +19,64 @@ export default function WatchlistPage() {
   const [movieToShare, setMovieToShare] = useState<Movie | null>(null);
   const [tvShowWatchlist, setTvShowWatchlist] = useState<TvShow[]>([]);
   const [loadingTvShows, setLoadingTvShows] = useState(true);
+  const [movieWatchlist, setMovieWatchlist] = useState<Movie[]>([]);
+  const [loadingMovies, setLoadingMovies] = useState(true);
   const { watchlist, removeFromWatchlist, rateMovie } = useAppStore();
+
+  // Fetch movie watchlist from database
+  useEffect(() => {
+    const fetchMovieWatchlist = async () => {
+      try {
+        console.log('🎬 Fetching movie watchlist from database...');
+        const response = await fetch("/api/watchlist");
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Movie watchlist fetched:', data.watchlist?.length || 0, 'items');
+          
+          // Fetch full movie details for each watchlist item
+          const moviesWithDetails = await Promise.all(
+            (data.watchlist || []).map(async (item: any) => {
+              try {
+                const movieResponse = await fetch(`/api/movies/${item.movieId}`);
+                if (movieResponse.ok) {
+                  const movieData = await movieResponse.json();
+                  console.log('✅ Movie fetched:', item.movieTitle, 'with poster:', movieData.movie?.poster);
+                  return {
+                    ...movieData.movie,
+                    id: item.movieId,
+                    title: item.movieTitle,
+                    year: item.movieYear,
+                    type: 'movie', // Explicitly mark as movie
+                    mediaType: 'movie',
+                  };
+                }
+              } catch (error) {
+                console.error(`❌ Error fetching movie ${item.movieId}:`, error);
+              }
+              // Fallback if fetch fails
+              console.warn(`⚠️ Using fallback data for movie ${item.movieId}: ${item.movieTitle}`);
+              return null;
+            })
+          );
+          
+          // Filter out null values and log final count
+          const validMovies = moviesWithDetails.filter(Boolean);
+          console.log('✅ Valid movies with full data:', validMovies.length);
+          
+          setMovieWatchlist(validMovies);
+          console.log('✅ Movie watchlist with details:', validMovies.length, 'items');
+        } else {
+          console.error('❌ Failed to fetch movie watchlist:', response.status);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching movie watchlist:", error);
+      } finally {
+        setLoadingMovies(false);
+      }
+    };
+
+    fetchMovieWatchlist();
+  }, []);
 
   // Fetch TV show watchlist from API
   useEffect(() => {
@@ -88,6 +145,24 @@ export default function WatchlistPage() {
     setShareModalOpen(true);
   };
 
+  const handleRemoveMovie = async (movieId: number) => {
+    try {
+      const response = await fetch(`/api/watchlist?movieId=${movieId}`, {
+        method: "DELETE",
+      });
+
+      if (response.ok) {
+        setMovieWatchlist((prev) => prev.filter((movie) => movie.id !== movieId));
+        removeFromWatchlist(movieId); // Also remove from Zustand store
+        console.log("✅ Removed movie from watchlist");
+      } else {
+        console.error("❌ Failed to remove movie from watchlist");
+      }
+    } catch (error) {
+      console.error("❌ Error removing movie from watchlist:", error);
+    }
+  };
+
   const handleRemoveTvShow = async (tvShowId: number) => {
     try {
       const response = await fetch(`/api/tvshow-watchlist?tvShowId=${tvShowId}`, {
@@ -105,28 +180,21 @@ export default function WatchlistPage() {
     }
   };
 
-  // Separate movies from TV shows based on type/mediaType
-  const moviesOnly = watchlist.filter((item: any) => 
-    !item.type || item.type === 'movie' || item.mediaType === 'movie' || 
-    (!item.type && !item.mediaType && !item.numberOfSeasons) // Default to movie if no type specified
-  );
-  
-  const tvShowsFromWatchlist = watchlist.filter((item: any) => 
-    item.type === 'tvshow' || item.mediaType === 'tv' || 
-    item.numberOfSeasons // Has seasons = TV show
-  );
+  // Use database watchlist instead of Zustand store
+  const moviesOnly = movieWatchlist;
+  const tvShowsFromWatchlist = tvShowWatchlist;
   
   // Debug logging
   useEffect(() => {
-    console.log('📊 Watchlist Separation Debug:', {
-      totalWatchlist: watchlist.length,
-      moviesOnly: moviesOnly.length,
-      tvShowsFromStore: tvShowsFromWatchlist.length,
-      tvShowsFromAPI: tvShowWatchlist.length,
-      movieTitles: moviesOnly.map((m: any) => `${m.title} (type: ${m.type || 'none'}, mediaType: ${m.mediaType || 'none'})`),
-      tvShowTitles: [...tvShowsFromWatchlist, ...tvShowWatchlist].map((s: any) => `${s.name || s.title} (type: ${s.type || 'none'}, mediaType: ${s.mediaType || 'none'}, seasons: ${s.numberOfSeasons || 'none'})`)
+    console.log('📊 Watchlist Debug:', {
+      moviesFromDB: movieWatchlist.length,
+      tvShowsFromDB: tvShowWatchlist.length,
+      loadingMovies,
+      loadingTvShows,
+      movieTitles: movieWatchlist.map((m: any) => m.title),
+      tvShowTitles: tvShowWatchlist.map((s: any) => s.name || s.title)
     });
-  }, [watchlist, tvShowWatchlist, moviesOnly.length, tvShowsFromWatchlist.length]);
+  }, [movieWatchlist, tvShowWatchlist, loadingMovies, loadingTvShows]);
   
   // Combine TV shows from both sources
   const allTvShows = [...tvShowWatchlist, ...tvShowsFromWatchlist];
@@ -147,6 +215,18 @@ export default function WatchlistPage() {
   ];
 
   const totalCount = moviesOnly.length + uniqueTvShows.length;
+
+  // Show loading state
+  if (loadingMovies || loadingTvShows) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-cyan-400"></div>
+          <p className="text-gray-400">Loading your watchlist...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -265,7 +345,7 @@ export default function WatchlistPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => removeFromWatchlist(movie.id)}
+                        onClick={() => handleRemoveMovie(movie.id)}
                         className="border-red-400/50 text-red-400 hover:bg-red-400/10"
                         data-testid={`remove-${movie.id}`}
                       >

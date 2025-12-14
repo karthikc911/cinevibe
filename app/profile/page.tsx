@@ -75,28 +75,56 @@ export default function ProfilePage() {
   // Load user preferences on mount
   useEffect(() => {
     const loadPreferences = async () => {
-      if (!session?.user?.email) return;
+      if (!session?.user?.email) {
+        console.log('⚠️ No session, skipping preferences load');
+        return;
+      }
       
       try {
+        console.log('🔄 Loading user preferences from database...');
         const response = await fetch('/api/user/preferences');
         if (response.ok) {
           const data = await response.json();
-          if (data.genres) setLocalGenres(data.genres);
-          if (data.aiInstructions) setAiInstructions(data.aiInstructions);
+          console.log('✅ User preferences loaded:', data);
+          
+          // Load languages
+          if (data.languages && data.languages.length > 0) {
+            setLocalLanguages(data.languages);
+            setLanguages(data.languages);
+            console.log('✅ Loaded languages:', data.languages);
+          }
+          
+          if (data.genres) {
+            setLocalGenres(data.genres);
+            console.log('✅ Loaded genres:', data.genres);
+          }
+          
+          if (data.aiInstructions) {
+            setAiInstructions(data.aiInstructions);
+            console.log('✅ Loaded AI instructions');
+          }
           
           // Load filter preferences from API (primary) or localStorage (fallback)
           if (data.recYearFrom !== null && data.recYearFrom !== undefined) {
             setRecYearFrom(data.recYearFrom);
+            console.log('✅ Loaded recYearFrom:', data.recYearFrom);
           } else {
             const savedYearFrom = localStorage.getItem('ai-rec-year-from');
-            if (savedYearFrom) setRecYearFrom(Number(savedYearFrom));
+            if (savedYearFrom) {
+              setRecYearFrom(Number(savedYearFrom));
+              console.log('✅ Loaded recYearFrom from localStorage:', savedYearFrom);
+            }
           }
           
           if (data.recYearTo !== null && data.recYearTo !== undefined) {
             setRecYearTo(data.recYearTo);
+            console.log('✅ Loaded recYearTo:', data.recYearTo);
           } else {
             const savedYearTo = localStorage.getItem('ai-rec-year-to');
-            if (savedYearTo) setRecYearTo(Number(savedYearTo));
+            if (savedYearTo) {
+              setRecYearTo(Number(savedYearTo));
+              console.log('✅ Loaded recYearTo from localStorage:', savedYearTo);
+            }
           }
           
           if (data.recMinImdb !== null && data.recMinImdb !== undefined) {
@@ -119,14 +147,16 @@ export default function ProfilePage() {
             const savedMaxBudget = localStorage.getItem('ai-rec-max-budget');
             if (savedMaxBudget) setRecMaxBudget(Number(savedMaxBudget));
           }
+        } else {
+          console.error('❌ Failed to load preferences:', response.status, response.statusText);
         }
       } catch (error) {
-        console.error('Error loading preferences:', error);
+        console.error('❌ Error loading preferences:', error);
       }
     };
 
     loadPreferences();
-  }, [session?.user?.email]);
+  }, [session?.user?.email, setLanguages]);
 
   const toggleLanguage = (lang: string) => {
     setLocalLanguages((prev) =>

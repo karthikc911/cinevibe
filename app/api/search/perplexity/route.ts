@@ -457,6 +457,39 @@ export async function POST(request: NextRequest) {
       userEmail: session.user.email,
     });
 
+    // Load user profile settings and ratings
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      select: {
+        id: true,
+        languages: true,
+        genres: true,
+        ratings: {
+          select: {
+            movieId: true,
+            rating: true,
+          },
+        },
+        tvShowRatings: {
+          select: {
+            tvShowId: true,
+            rating: true,
+          },
+        },
+      },
+    });
+
+    // Get rated movie/TV show IDs to exclude from results
+    const ratedMovieIds = user?.ratings.map(r => r.movieId) || [];
+    const ratedTvShowIds = user?.tvShowRatings.map(r => r.tvShowId) || [];
+
+    logger.info('SEARCH_PERPLEXITY', '✅ User profile loaded', {
+      languages: user?.languages || [],
+      genres: user?.genres || [],
+      ratedMovies: ratedMovieIds.length,
+      ratedTvShows: ratedTvShowIds.length,
+    });
+
     // Step 1: Extract media list from Perplexity
     let mediaList = await extractMediaListFromPerplexity(query);
 
@@ -628,13 +661,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Separate movies and TV shows
-    const movies = results.filter(r => r.type === 'movie');
-    const tvShows = results.filter(r => r.type === 'tvshow');
+    let movies = results.filter(r => r.type === 'movie');
+    let tvShows = results.filter(r => r.type === 'tvshow');
+
+    // Filter out already-rated items (user can choose to see them again if they want)
+    const moviesBeforeFilter = movies.length;
+    const tvShowsBeforeFilter = tvShows.length;
+    
+    movies = movies.filter(m => !ratedMovieIds.includes(m.id));
+    tvShows = tvShows.filter(t => !ratedTvShowIds.includes(t.id));
+
+    logger.info('SEARCH_PERPLEXITY', '🎯 Filtered rated items', {
+      moviesBeforeFilter,
+      moviesAfterFilter: movies.length,
+      moviesFiltered: moviesBeforeFilter - movies.length,
+      tvShowsBeforeFilter,
+      tvShowsAfterFilter: tvShows.length,
+      tvShowsFiltered: tvShowsBeforeFilter - tvShows.length,
+    });
 
     const duration = Date.now() - startTime;
     logger.info('SEARCH_PERPLEXITY', '✅ Search completed', {
       duration: `${duration}ms`,
-      totalResults: results.length,
+      totalResults: movies.length + tvShows.length,
       movies: movies.length,
       tvShows: tvShows.length,
     });
@@ -642,7 +691,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       movies,
       tvShows,
-      totalResults: results.length,
+      totalResults: movies.length + tvShows.length,
     });
   } catch (error: any) {
     logger.error('SEARCH_PERPLEXITY', '❌ Error in Perplexity search', {
