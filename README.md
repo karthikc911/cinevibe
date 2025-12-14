@@ -2,6 +2,18 @@
 
 A beautiful, dark cinematic UI movie recommendation system with AI-powered suggestions. Built with Next.js, TypeScript, Tailwind CSS, and advanced AI integration.
 
+## ⚡ Start the Server
+
+```bash
+npm run dev
+```
+
+**Access the app at:** http://localhost:3000
+
+> **Note:** First-time users will be redirected to `/discover` where you'll see **Login** and **Sign Up** buttons.
+
+---
+
 ## ✨ Features
 
 - **🌙 Dark Cinematic UI**: Gradient backgrounds with neon cyan glow accents

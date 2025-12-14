@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,14 @@ import { Send, Heart, Search as SearchIcon, Loader2, AlertCircle, Star, X, Spark
 
 export default function HomePage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
+  
+  // Redirect to discover if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/discover");
+    }
+  }, [status, router]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchedMovie, setSearchedMovie] = useState<Movie | null>(null);
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
@@ -900,6 +909,15 @@ export default function HomePage() {
       setTimeout(() => setShowAiPanel(false), 5000);
     }
   };
+
+  // Show loading while checking authentication
+  if (status === "loading" || status === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8 pb-24">
