@@ -142,8 +142,8 @@ export default function RateScreen() {
         } else if (currentTvShow) {
           await ratingsApi.rateTvShow(
             currentTvShow.id,
-            currentTvShow.name || currentTvShow.title,
-            currentTvShow.year,
+            currentTvShow.name || currentTvShow.title || 'Unknown',
+            currentTvShow.year || 0,
             rating
           );
         }
@@ -193,8 +193,8 @@ export default function RateScreen() {
         } else if (currentTvShow) {
           await watchlistApi.addTvShowToWatchlist(
             currentTvShow.id,
-            currentTvShow.name || currentTvShow.title,
-            currentTvShow.year
+            currentTvShow.name || currentTvShow.title || 'Unknown',
+            currentTvShow.year || 0
           );
         }
       }

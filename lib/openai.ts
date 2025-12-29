@@ -38,7 +38,7 @@ export async function retrieveUserPreferences(
   });
   
   // Calculate similarity scores
-  const scoredPreferences = preferences.map((pref) => ({
+  const scoredPreferences = preferences.map((pref: any) => ({
     ...pref,
     similarity: cosineSimilarity(queryEmbedding, pref.embedding),
   }));
@@ -58,7 +58,7 @@ export async function storeUserPreference(
 ) {
   const embedding = await generateEmbedding(`${preferenceType}: ${value}`);
   
-  return await prisma.userPreference.create({
+  return await (prisma.userPreference as any).create({
     data: {
       userId,
       preferenceType,
@@ -194,13 +194,13 @@ export async function chatWithAI(
     model: "gpt-4-turbo-preview",
     messages: [
       {
-        role: "system",
+        role: "system" as const,
         content: `You are CineVibe, a friendly AI movie companion. You help users discover movies based on their preferences.
 User's preferences:\n${preferenceContext}\n\nBe conversational, enthusiastic, and helpful.`,
       },
-      ...conversationHistory,
+      ...(conversationHistory as any[]),
       {
-        role: "user",
+        role: "user" as const,
         content: message,
       },
     ],

@@ -55,7 +55,7 @@ export function MovieDetailModal({
     : movie.poster
     ? `${TMDB_IMAGE_BASE}${movie.poster}`
     : null;
-  const languageName = LanguageNames[movie.lang] || movie.lang?.toUpperCase() || 'N/A';
+  const languageName = (movie.lang && LanguageNames[movie.lang]) || movie.lang?.toUpperCase() || 'N/A';
   const isTV = 'name' in movie || movie.type === 'tvshow' || movie.mediaType === 'tv';
   const imdbRating = movie.imdb || movie.imdbRating;
   const voteCount = movie.imdbVoterCount || movie.voteCount;
@@ -168,28 +168,28 @@ export function MovieDetailModal({
             )}
 
             {/* Budget and Box Office */}
-            {(movie.budget || movie.boxOffice) && (
+            {((movie as any).budget || (movie as any).boxOffice) && (
               <View style={styles.financialSection}>
                 <Text style={styles.sectionTitle}>💰 Financial Info</Text>
                 <View style={styles.financialRow}>
-                  {movie.budget && (
+                  {(movie as any).budget && (
                     <View style={styles.financialItem}>
                       <DollarSign color={Colors.success} size={18} />
                       <View>
                         <Text style={styles.financialLabel}>Budget</Text>
                         <Text style={[styles.financialValue, { color: Colors.success }]}>
-                          {formatNumber(movie.budget)}
+                          {formatNumber((movie as any).budget)}
                         </Text>
                       </View>
                     </View>
                   )}
-                  {movie.boxOffice && (
+                  {(movie as any).boxOffice && (
                     <View style={styles.financialItem}>
                       <TrendingUp color={Colors.primary} size={18} />
                       <View>
                         <Text style={styles.financialLabel}>Box Office</Text>
                         <Text style={[styles.financialValue, { color: Colors.primary }]}>
-                          {formatNumber(movie.boxOffice)}
+                          {formatNumber((movie as any).boxOffice)}
                         </Text>
                       </View>
                     </View>

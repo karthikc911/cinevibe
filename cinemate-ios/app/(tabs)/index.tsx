@@ -95,7 +95,7 @@ export default function HomeScreen() {
   const handleRate = async (rating: RatingType) => {
     if (!ratingItem) return;
 
-    const title = 'title' in ratingItem ? ratingItem.title : ratingItem.name;
+    const title = ('title' in ratingItem ? ratingItem.title : ratingItem.name) || 'Unknown';
 
     try {
       if (!useLocalData && !isUsingDemoMode) {
@@ -121,7 +121,7 @@ export default function HomeScreen() {
   };
 
   const handleAddToWatchlist = async (item: Movie | TvShow) => {
-    const title = 'title' in item ? item.title : item.name;
+    const title = ('title' in item ? item.title : item.name) || 'Unknown';
 
     try {
       if (!useLocalData && !isUsingDemoMode) {

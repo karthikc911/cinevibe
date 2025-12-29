@@ -79,7 +79,7 @@ export async function updateMovieFromTMDB(movieId: number): Promise<boolean> {
         overview: tmdbData.overview || null,
         posterPath: tmdbData.poster_path,
         backdropPath: tmdbData.backdrop_path,
-        releaseDate: tmdbData.release_date ? new Date(tmdbData.release_date) : null,
+        releaseDate: tmdbData.release_date || null,
         year: tmdbData.release_date ? parseInt(tmdbData.release_date.split('-')[0]) : null,
         voteAverage: tmdbData.vote_average,
         voteCount: tmdbData.vote_count,

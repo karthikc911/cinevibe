@@ -46,18 +46,17 @@ export default function LoginScreen() {
 
   // Google OAuth configuration
   const [request, response, promptAsync] = Google.useAuthRequest({
-    // For development with Expo Go, use expoClientId
-    expoClientId: GOOGLE_EXPO_CLIENT_ID,
     // For production iOS builds
     iosClientId: GOOGLE_IOS_CLIENT_ID,
-    // Web client ID (same as your website)
+    // Web client ID (same as your website, used for Expo Go dev)
     webClientId: GOOGLE_WEB_CLIENT_ID,
+    // Client ID (for Expo Go development)
+    clientId: GOOGLE_EXPO_CLIENT_ID,
     // Scopes
     scopes: ['profile', 'email'],
     // Redirect URI for Expo Go
     redirectUri: makeRedirectUri({
       scheme: 'cinemate',
-      useProxy: true,
     }),
   });
 

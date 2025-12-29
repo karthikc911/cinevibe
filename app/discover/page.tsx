@@ -1,8 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
+
+// Force dynamic rendering to avoid static generation issues with useSearchParams
+export const dynamic = 'force-dynamic';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -19,7 +22,7 @@ import Link from "next/link";
 type TimeWindow = 'day' | 'week';
 type PopularCategory = 'streaming' | 'on_tv' | 'for_rent' | 'in_theaters';
 
-export default function DiscoverPage() {
+function DiscoverContent() {
   const { data: session, status } = useSession();
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get("search");
@@ -1018,5 +1021,14 @@ function MovieSection({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// Wrap the main component in Suspense to handle useSearchParams
+export default function DiscoverPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
+      <DiscoverContent />
+    </Suspense>
   );
 }

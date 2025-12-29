@@ -21,7 +21,7 @@ class Logger {
   constructor() {
     this.isServer = typeof window === 'undefined';
     // Detect Edge Runtime (no access to Node.js fs/path modules)
-    this.isEdgeRuntime = this.isServer && typeof EdgeRuntime !== 'undefined';
+    this.isEdgeRuntime = this.isServer && typeof (globalThis as any).EdgeRuntime !== 'undefined';
   }
 
   private formatTimestamp(): string {

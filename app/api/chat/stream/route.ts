@@ -8,7 +8,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-export const runtime = "edge"; // Use Edge runtime for streaming
+// Note: Edge runtime disabled due to Prisma compatibility
+// export const runtime = "edge";
 
 export async function POST(request: NextRequest) {
   try {

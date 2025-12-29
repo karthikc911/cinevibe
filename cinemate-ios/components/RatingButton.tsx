@@ -72,7 +72,7 @@ export function RatingButtonGroup({
   size = 'normal',
   layout = 'grid',
 }: RatingButtonGroupProps) {
-  const ratings: RatingType[] = ['amazing', 'good', 'meh', 'bad', 'not-interested'];
+  const ratings: RatingType[] = ['amazing', 'good', 'meh', 'awful', 'not-interested'];
 
   return (
     <View style={[styles.group, layout === 'row' && styles.groupRow]}>

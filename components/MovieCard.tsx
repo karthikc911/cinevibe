@@ -78,7 +78,7 @@ export function MovieCard({
   const googleSearchLink = `https://www.google.com/search?q=${encodeURIComponent(movie.title + ' ' + (movie.year || ''))}`;
 
   // Check if movie has AI-enriched data
-  const isEnriched = !!(enrichedMovie.imdbVoterCount || enrichedMovie.userReviewSummary || enrichedMovie.budget || enrichedMovie.boxOffice);
+  const isEnriched = !!((enrichedMovie as any).imdbVoterCount || (enrichedMovie as any).userReviewSummary || (enrichedMovie as any).budget || (enrichedMovie as any).boxOffice);
 
   // Handle AI enrichment
   const handleEnrich = async () => {
@@ -144,17 +144,17 @@ export function MovieCard({
             </Badge>
 
             {/* Movie/TV Type Badge - Below Language Badge */}
-            {(movie.type || movie.mediaType) && (
+            {((movie as any).type || (movie as any).mediaType) && (
               <Badge
                 variant="secondary"
                 className={`absolute top-8 left-2 text-xs backdrop-blur-sm border font-medium z-10 ${
-                  (movie.type === 'tvshow' || movie.mediaType === 'tv')
+                  ((movie as any).type === 'tvshow' || (movie as any).mediaType === 'tv')
                     ? 'bg-purple-600/90 border-purple-400/50 text-white'
                     : 'bg-cyan-600/90 border-cyan-400/50 text-white'
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  {(movie.type === 'tvshow' || movie.mediaType === 'tv') ? (
+                  {((movie as any).type === 'tvshow' || (movie as any).mediaType === 'tv') ? (
                     <>
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <rect x="2" y="7" width="20" height="15" rx="2" ry="2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -226,19 +226,19 @@ export function MovieCard({
         </div>
 
         {/* IMDB Rating, Vote Count & Google Link - Single Row */}
-        {!minimal && (enrichedMovie.imdb || enrichedMovie.imdbRating || enrichedMovie.imdbVoterCount) && (
+        {!minimal && ((enrichedMovie as any).imdb || (enrichedMovie as any).imdbRating || (enrichedMovie as any).imdbVoterCount) && (
           <div className="flex items-center gap-2 flex-wrap">
             {/* IMDB Rating with Vote Count */}
-            {(enrichedMovie.imdb || enrichedMovie.imdbRating) && (
+            {((enrichedMovie as any).imdb || (enrichedMovie as any).imdbRating) && (
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-yellow-500/20 border border-yellow-500/30">
                 <span className="text-yellow-400 text-lg">★</span>
                 <div className="flex flex-col">
                   <span className="text-yellow-300 text-sm font-bold leading-none">
-                    {formatRating(enrichedMovie.imdbRating || enrichedMovie.imdb)}/10
+                    {formatRating((enrichedMovie as any).imdbRating || (enrichedMovie as any).imdb)}/10
                   </span>
-                  {enrichedMovie.imdbVoterCount && (
+                  {(enrichedMovie as any).imdbVoterCount && (
                     <span className="text-yellow-400/70 text-[9px] leading-none mt-0.5">
-                      {formatNumber(enrichedMovie.imdbVoterCount)} votes
+                      {formatNumber((enrichedMovie as any).imdbVoterCount)} votes
                     </span>
                   )}
                 </div>
@@ -246,9 +246,9 @@ export function MovieCard({
               </div>
             )}
             {/* Just vote count if no rating */}
-            {!(enrichedMovie.imdb || enrichedMovie.imdbRating) && enrichedMovie.imdbVoterCount && (
+            {!((enrichedMovie as any).imdb || (enrichedMovie as any).imdbRating) && (enrichedMovie as any).imdbVoterCount && (
               <div className="px-2 py-1 rounded bg-yellow-500/20 text-xs font-semibold text-yellow-300">
-                {formatNumber(enrichedMovie.imdbVoterCount)} votes
+                {formatNumber((enrichedMovie as any).imdbVoterCount)} votes
               </div>
             )}
 

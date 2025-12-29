@@ -301,7 +301,7 @@ export const DEMO_USER = {
   id: 'demo-user',
   name: 'Demo User',
   email: 'demo@cinemate.app',
-  image: null,
+  image: undefined,
   languages: ['en', 'hi'],
   genres: ['Action', 'Sci-Fi', 'Drama'],
 };

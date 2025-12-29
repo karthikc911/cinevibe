@@ -251,14 +251,14 @@ export default function SearchScreen() {
     if (!currentItem) return;
 
     try {
-      const title = 'title' in currentItem ? currentItem.title : currentItem.name;
+      const title = ('title' in currentItem ? currentItem.title : currentItem.name) || 'Unknown';
       const isMovie = viewMode === 'ai-movies';
       
       if (!isUsingDemoMode) {
         if (isMovie) {
-          await ratingsApi.rateMovie(currentItem.id, title, currentItem.year, rating);
+          await ratingsApi.rateMovie(currentItem.id, title, currentItem.year || 0, rating);
         } else {
-          await ratingsApi.rateTvShow(currentItem.id, title, currentItem.year, rating);
+          await ratingsApi.rateTvShow(currentItem.id, title, currentItem.year || 0, rating);
         }
       }
       
@@ -272,7 +272,7 @@ export default function SearchScreen() {
 
   const handleAddToWatchlist = async (item: Movie | TvShow) => {
     try {
-      const title = 'title' in item ? item.title : item.name;
+      const title = ('title' in item ? item.title : item.name) || 'Unknown';
       const isMovie = 'title' in item;
       
       if (!isUsingDemoMode) {
@@ -356,7 +356,7 @@ export default function SearchScreen() {
       : item.poster
       ? `${TMDB_IMAGE_BASE}${item.poster}`
       : null;
-    const languageName = LanguageNames[item.lang] || item.lang?.toUpperCase() || 'N/A';
+    const languageName = (item.lang && LanguageNames[item.lang]) || item.lang?.toUpperCase() || 'N/A';
     const isTV = viewMode === 'ai-tvshows';
     const imdbRating = item.imdb || item.imdbRating;
     const voteCount = item.imdbVoterCount || item.voteCount;
@@ -455,21 +455,21 @@ export default function SearchScreen() {
               )}
 
               {/* Budget/Box Office */}
-              {(item.budget || item.boxOffice) && (
+              {((item as any).budget || (item as any).boxOffice) && (
                 <View style={styles.financialRow}>
-                  {item.budget && (
+                  {(item as any).budget && (
                     <View style={styles.financialItem}>
                       <Text style={styles.financialLabel}>Budget</Text>
                       <Text style={[styles.financialValue, { color: Colors.success }]}>
-                        {formatNumber(item.budget)}
+                        {formatNumber((item as any).budget)}
                       </Text>
                     </View>
                   )}
-                  {item.boxOffice && (
+                  {(item as any).boxOffice && (
                     <View style={styles.financialItem}>
                       <Text style={styles.financialLabel}>Box Office</Text>
                       <Text style={[styles.financialValue, { color: Colors.primary }]}>
-                        {formatNumber(item.boxOffice)}
+                        {formatNumber((item as any).boxOffice)}
                       </Text>
                     </View>
                   )}
@@ -562,22 +562,22 @@ export default function SearchScreen() {
             <Text style={styles.sectionTitle}>🤖 AI Picks</Text>
             <View style={styles.aiButtonsRow}>
               <TouchableOpacity
-                style={[styles.aiButton, viewMode === 'ai-movies' && styles.aiButtonActive]}
+                style={[styles.aiButton]}
                 onPress={loadAIMovies}
                 disabled={loading}
               >
-                <Sparkles color={viewMode === 'ai-movies' ? Colors.background : Colors.primary} size={18} />
-                <Text style={[styles.aiButtonText, viewMode === 'ai-movies' && styles.aiButtonTextActive]}>
+                <Sparkles color={Colors.primary} size={18} />
+                <Text style={[styles.aiButtonText]}>
                   AI Movie Picks
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.aiButton, viewMode === 'ai-tvshows' && styles.aiButtonActive]}
+                style={[styles.aiButton]}
                 onPress={loadAITvShows}
                 disabled={loading}
               >
-                <Sparkles color={viewMode === 'ai-tvshows' ? Colors.background : '#9333ea'} size={18} />
-                <Text style={[styles.aiButtonText, viewMode === 'ai-tvshows' && styles.aiButtonTextActive]}>
+                <Sparkles color={'#9333ea'} size={18} />
+                <Text style={[styles.aiButtonText]}>
                   AI TV Picks
                 </Text>
               </TouchableOpacity>

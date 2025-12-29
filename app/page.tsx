@@ -522,7 +522,7 @@ export default function HomePage() {
       // Determine if this is a TV show or movie
       const isTvShow = (movie as any).type === 'tvshow' || (movie as any).mediaType === 'tv' || (movie as any).name;
       const endpoint = isTvShow ? '/api/tvshow-ratings' : '/api/ratings';
-      const title = (movie as any).name || movie.title;
+      const title = (movie as any).name || (movie as any).title;
       
       console.log('💾 Saving rating:', {
         movieId: movie.id,
@@ -574,7 +574,7 @@ export default function HomePage() {
       console.log('✅ Rating saved successfully:', result);
 
       // Success - update UI
-      rateMovie(movieId, rating);
+      rateMovie(movie as Movie, rating);
       
       // Check if this is an AI movie in the current view
       const isAIMovie = aiMovies.find(m => m.id === movieId);
@@ -1024,7 +1024,7 @@ export default function HomePage() {
             setMovieToShare(null);
           }}
           movieTitle={movieToShare.title}
-          movieYear={movieToShare.year}
+          movieYear={movieToShare.year || 0}
           movieId={movieToShare.id}
         />
       )}

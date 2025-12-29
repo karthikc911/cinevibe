@@ -33,7 +33,7 @@ export function MovieMeta({ movie, onMatchClick }: MovieMetaProps) {
         <MatchReasoningModal
           isOpen={showMatchModal}
           onClose={() => setShowMatchModal(false)}
-          movieTitle={movie.title || movie.name || ""}
+          movieTitle={movie.title || (movie as any).name || ""}
           matchPercentage={movie.matchPercent}
           reasons={movie.matchReasons}
         />
