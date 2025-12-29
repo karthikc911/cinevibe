@@ -113,7 +113,7 @@ async function addMoviesToDatabase(movies: any[]): Promise<number> {
             overview: movie.overview,
             posterPath: movie.poster_path,
             backdropPath: movie.backdrop_path,
-            releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+            releaseDate: movie.release_date || null,
             year: movie.release_date ? new Date(movie.release_date).getFullYear() : null,
             voteAverage: movie.vote_average,
             voteCount: movie.vote_count,
