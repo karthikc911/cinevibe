@@ -234,7 +234,7 @@ export async function GET(request: NextRequest) {
       });
       
       // Sort by original order
-      items = itemIds.map(id => items.find(item => item.id === id)).filter(Boolean);
+      items = itemIds.map(id => items.find((item: any) => item.id === id)).filter(Boolean);
     }
 
     logger.info('TMDB_CACHE', 'Retrieved cached items', {
