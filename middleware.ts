@@ -34,27 +34,66 @@ export async function middleware(request: NextRequest) {
   const isProtectedPath = protectedPaths.some(path => pathname.startsWith(path));
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
   
+  // Get the secret - check multiple possible env var names
+  const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET;
+  
   // If it's a protected path, check authentication
   if (isProtectedPath) {
-    const token = await getToken({ 
-      req: request, 
-      secret: process.env.NEXTAUTH_SECRET 
-    });
+    // Also check for session cookie as fallback
+    const sessionCookie = request.cookies.get('next-auth.session-token') || 
+                          request.cookies.get('__Secure-next-auth.session-token');
     
-    // If no token, redirect to discover (which will show login/signup)
-    if (!token) {
+    let isAuthenticated = false;
+    
+    // Try JWT token first if we have a secret
+    if (secret) {
+      try {
+        const token = await getToken({ 
+          req: request, 
+          secret: secret 
+        });
+        isAuthenticated = !!token;
+      } catch (error) {
+        console.log('[MIDDLEWARE] getToken error:', error);
+      }
+    }
+    
+    // Fallback: check if session cookie exists
+    if (!isAuthenticated && sessionCookie) {
+      isAuthenticated = true;
+    }
+    
+    // If still not authenticated, redirect to discover
+    if (!isAuthenticated) {
+      console.log('[MIDDLEWARE] No auth found, redirecting to /discover from', pathname);
       return NextResponse.redirect(new URL('/discover', request.url));
     }
   }
   
   // If user is logged in and tries to access login/signup, redirect to discover
   if (isPublicPath) {
-    const token = await getToken({ 
-      req: request, 
-      secret: process.env.NEXTAUTH_SECRET 
-    });
+    const sessionCookie = request.cookies.get('next-auth.session-token') || 
+                          request.cookies.get('__Secure-next-auth.session-token');
     
-    if (token) {
+    let isAuthenticated = false;
+    
+    if (secret) {
+      try {
+        const token = await getToken({ 
+          req: request, 
+          secret: secret 
+        });
+        isAuthenticated = !!token;
+      } catch (error) {
+        // Ignore error
+      }
+    }
+    
+    if (!isAuthenticated && sessionCookie) {
+      isAuthenticated = true;
+    }
+    
+    if (isAuthenticated) {
       return NextResponse.redirect(new URL('/discover', request.url));
     }
   }
