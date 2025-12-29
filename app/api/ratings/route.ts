@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!user) {
-      logger.error('RATINGS', 'User not found in database', { email: session.user.email });
+      logger.error('RATINGS', 'User not found in database', { email: currentUser.email });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     
