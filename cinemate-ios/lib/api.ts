@@ -10,10 +10,10 @@ import { Movie, TvShow, Rating, WatchlistItem, TvShowWatchlistItem, RatingType }
 
 // For local development (from phone on same network):
 // const API_BASE = 'http://YOUR_MAC_IP:3000/api';
+// const API_BASE = 'http://10.0.0.17:3000/api';
 
-// For local development (from phone on same network):
-// Your Mac's IP address + backend port
-const API_BASE = 'http://10.0.0.17:3000/api';
+// For production (Vercel deployment):
+const API_BASE = 'https://cinevibe-six.vercel.app/api';
 
 const api = axios.create({
   baseURL: API_BASE,
