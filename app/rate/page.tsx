@@ -10,7 +10,8 @@ import { MovieCard } from "@/components/MovieCard";
 import { RatingPills } from "@/components/RatingPills";
 import { Movie, TvShow } from "@/lib/data";
 import { useAppStore, Rating } from "@/lib/store";
-import { Loader2, Sparkles, ChevronLeft, Heart, X, ThumbsUp, Tv } from "lucide-react";
+import { Loader2, Sparkles, ChevronLeft, Heart, X, ThumbsUp, Tv, List } from "lucide-react";
+import Link from "next/link";
 
 export default function RatePage() {
   const router = useRouter();
@@ -273,6 +274,9 @@ export default function RatePage() {
     
     const movie = movies[0];
     
+    // Save current movie to history before adding to watchlist
+    setPreviousMovies((prev) => [...prev, movie]);
+    
     try {
       const response = await fetch("/api/watchlist", {
         method: "POST",
@@ -287,11 +291,25 @@ export default function RatePage() {
       if (response.ok) {
         addToWatchlist(movie);
         console.log("Added to watchlist successfully");
+        
+        // Remove from current list and show next movie
+        setMovies((prev) => {
+          const filtered = prev.filter((m) => m.id !== movie.id);
+          // Auto-load more if we're down to last movie
+          if (filtered.length === 0) {
+            loadMovies();
+          }
+          return filtered;
+        });
       } else {
         console.error("Failed to add to watchlist");
+        // Remove from previousMovies if add failed
+        setPreviousMovies((prev) => prev.slice(0, -1));
       }
     } catch (error) {
       console.error("Error adding to watchlist:", error);
+      // Remove from previousMovies if error occurred
+      setPreviousMovies((prev) => prev.slice(0, -1));
     }
   };
 
@@ -500,15 +518,30 @@ export default function RatePage() {
         }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-5xl font-bold text-white flex items-center gap-3">
-          <span className="text-4xl">⭐</span>
-          <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
-            Rate Movies
-          </span>
-        </h1>
-        <p className="text-xl text-gray-400">
-          Rate movies to help us understand your taste and improve recommendations
-        </p>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1">
+            <h1 className="text-5xl font-bold text-white flex items-center gap-3">
+              <span className="text-4xl">⭐</span>
+              <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
+                Rate Movies
+              </span>
+            </h1>
+            <p className="text-xl text-gray-400 mt-2">
+              Rate movies to help us understand your taste and improve recommendations
+            </p>
+          </div>
+          
+          {/* View My Ratings Button */}
+          <Link href="/my-ratings">
+            <Button 
+              variant="outline"
+              className="border-cyan-400/50 text-cyan-400 hover:bg-cyan-400/10 hover:border-cyan-400 transition-all shadow-lg hover:shadow-cyan-400/20"
+            >
+              <List className="w-5 h-5 mr-2" />
+              <span className="font-semibold">View My Ratings</span>
+            </Button>
+          </Link>
+        </div>
       </motion.div>
 
       {/* Generate Button */}

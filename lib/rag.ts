@@ -1,7 +1,7 @@
 /**
  * RAG (Retrieval Augmented Generation) Pipeline
  * 
- * This module provides a complete RAG implementation for CineMate using:
+ * This module provides a complete RAG implementation for CineVibe using:
  * - OpenAI embeddings (text-embedding-3-small)
  * - pgvector for similarity search
  * - GPT-4 for generation
@@ -336,7 +336,7 @@ export async function generateRecommendations(
     };
 
     // Generate recommendations with GPT-5-nano
-    const systemPrompt = `You are an expert movie recommender for CineMate. Based on the user's profile and preferences, suggest personalized movie recommendations.
+    const systemPrompt = `You are an expert movie recommender for CineVibe. Based on the user's profile and preferences, suggest personalized movie recommendations.
 
 Context includes:
 - User's language preferences
@@ -435,7 +435,7 @@ export async function chatWithAI(
       )
       .join("\n");
 
-    const systemPrompt = `You are CineMate AI, a friendly and knowledgeable movie companion. You help users discover movies based on their preferences.
+    const systemPrompt = `You are CineVibe AI, a friendly and knowledgeable movie companion. You help users discover movies based on their preferences.
 
 User's preferences (with relevance to current conversation):
 ${preferenceContext}

@@ -58,6 +58,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Create recommendations for all valid friends
+    // Ensure movieYear is an integer (it may come as string from frontend)
+    const parsedMovieYear = movieYear ? parseInt(String(movieYear), 10) : null;
+    
     const recommendations = await Promise.all(
       validFriendIds.map(friendId =>
         prisma.friendMovieRecommendation.create({
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
             receiverId: friendId,
             movieId,
             movieTitle,
-            movieYear,
+            movieYear: parsedMovieYear,
             message: message || null,
           },
         })

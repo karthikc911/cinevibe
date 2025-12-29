@@ -10,6 +10,7 @@ import {
   buildMovieRecommendationPrompt,
   LANGUAGE_DESCRIPTIONS 
 } from '@/config/prompts';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const PERPLEXITY_MODEL = 'sonar-pro';
@@ -18,9 +19,12 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication - support both web session and mobile token
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
+    
+    if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -30,20 +34,16 @@ export async function POST(request: NextRequest) {
     const count = Math.min(parseInt(request.nextUrl.searchParams.get('count') || '10'), 10); // Max 10 movies
 
     logger.info('SMART_PICKS', 'Generating smart picks for user', {
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
       customQuery: customUserQuery || 'Using user preferences',
       count,
       timestamp: new Date().toISOString(),
     });
 
-    // Get user with preferences, ratings, and watchlist
+    // Get user with preferences, watchlist, and AI feedback
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       include: {
-        ratings: {
-          orderBy: { createdAt: 'desc' },
-          take: 50,
-        },
         watchlist: {
           select: {
             movieId: true,
@@ -51,12 +51,41 @@ export async function POST(request: NextRequest) {
             movieYear: true,
           },
         },
+        aiFeedback: {
+          where: {
+            feedbackType: 'movie',
+            isActive: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5, // Include last 5 active feedback entries
+        },
       },
     });
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
+    
+    // Fetch ALL user ratings separately to ensure complete exclusion
+    // This is critical - we need ALL rated movies, not just last 50
+    const allRatings = await prisma.movieRating.findMany({
+      where: { userId: user.id },
+      select: {
+        movieId: true,
+        movieTitle: true,
+        movieYear: true,
+        rating: true,
+      },
+    });
+    
+    logger.info('SMART_PICKS', '🔢 Total ratings fetched for exclusion', {
+      totalRatings: allRatings.length,
+      userId: user.id,
+      sampleRatedTitles: allRatings.slice(0, 20).map(r => r.movieTitle),
+    });
+    
+    // Extract AI feedback texts
+    const userFeedback = user.aiFeedback?.map(f => f.feedback) || [];
     
     logger.info('SMART_PICKS', '🎯 User Preferences Loaded from Database', {
       languages: user.languages,
@@ -67,29 +96,152 @@ export async function POST(request: NextRequest) {
       recMinImdb: user.recMinImdb || 'Not set',
       recMinBoxOffice: user.recMinBoxOffice ? Number(user.recMinBoxOffice) : 'Not set',
       recMaxBudget: user.recMaxBudget ? Number(user.recMaxBudget) : 'Not set',
+      aiFeedbackCount: userFeedback.length,
+      aiFeedback: userFeedback.slice(0, 3), // Log first 3 feedback entries
     });
 
-    // Categorize ratings (exclude not-seen and not-interested from recommendations)
-    const amazing = user.ratings.filter((r) => r.rating === 'amazing');
-    const good = user.ratings.filter((r) => r.rating === 'good');
-    const awful = user.ratings.filter((r) => r.rating === 'awful');
-    const notInterested = user.ratings.filter((r) => r.rating === 'not-interested');
+    // Categorize ALL ratings (include ALL rating types to exclude from recommendations)
+    // Using allRatings to ensure we have EVERY rating, not just last 50
+    const amazing = allRatings.filter((r) => r.rating === 'amazing');
+    const good = allRatings.filter((r) => r.rating === 'good');
+    const meh = allRatings.filter((r) => r.rating === 'meh');
+    const awful = allRatings.filter((r) => r.rating === 'awful');
+    const notInterested = allRatings.filter((r) => r.rating === 'not-interested');
+    const skipped = allRatings.filter((r) => r.rating === 'skipped');
     const watchlistMovies = user.watchlist || [];
     
     // Get all rated/interacted movie IDs to exclude from recommendations
+    // CRITICAL: Using allRatings to exclude ALL rated movies
     const excludedMovieIds = [
-      ...user.ratings.map(r => r.movieId),
+      ...allRatings.map(r => r.movieId),
       ...watchlistMovies.map(w => w.movieId),
     ];
     const notInterestedMovieIds = notInterested.map(r => r.movieId);
 
-    logger.info('SMART_PICKS', 'User rating breakdown', {
+    // Also create a title-based exclusion set (normalized lowercase) for robust filtering
+    // This catches movies with same title but different IDs
+    const excludedMovieTitles = new Set<string>();
+    const excludedMovieTitlesOriginal = new Map<string, string>(); // normalized -> original for logging
+    
+    // Helper to normalize title for comparison
+    const normalizeTitle = (title: string): string[] => {
+      const variations: string[] = [];
+      
+      // 1. Full normalized (lowercase, alphanumeric only)
+      const normalized = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+      variations.push(normalized);
+      
+      // 2. Without year suffix: "Movie (2022)" -> "movie"
+      const withoutYear = title.replace(/\s*\(\d{4}\)\s*$/gi, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (withoutYear !== normalized) variations.push(withoutYear);
+      
+      // 3. Without numbers for sequels: "Drishyam 2" -> "drishyam"
+      const withoutNumbers = title.toLowerCase().replace(/[0-9]/g, '').replace(/[^a-z]/g, '');
+      if (withoutNumbers.length > 3 && withoutNumbers !== normalized) variations.push(withoutNumbers);
+      
+      // 4. Core title (first significant words): "Vikram Vedha" -> "vikramvedha"
+      const words = title.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+      if (words.length >= 2) {
+        variations.push(words.slice(0, 2).join('')); // First 2 words
+        variations.push(words.join('')); // All words
+      }
+      
+      // 5. Handle common patterns: "The Movie" -> "movie"
+      const withoutThe = title.toLowerCase().replace(/^the\s+/i, '').replace(/[^a-z0-9]/g, '');
+      if (withoutThe !== normalized) variations.push(withoutThe);
+      
+      return [...new Set(variations)].filter(v => v.length > 2);
+    };
+    
+    // Add all variations of rated movie titles
+    allRatings.forEach(r => {
+      const variations = normalizeTitle(r.movieTitle);
+      variations.forEach(v => {
+        excludedMovieTitles.add(v);
+        excludedMovieTitlesOriginal.set(v, r.movieTitle);
+      });
+    });
+    
+    watchlistMovies.forEach(w => {
+      const variations = normalizeTitle(w.movieTitle);
+      variations.forEach(v => {
+        excludedMovieTitles.add(v);
+        excludedMovieTitlesOriginal.set(v, w.movieTitle);
+      });
+    });
+    
+    // Helper function to check if a title is excluded (with fuzzy matching)
+    const isTitleExcluded = (title: string): { excluded: boolean; matchedWith?: string; reason?: string } => {
+      const variations = normalizeTitle(title);
+      
+      // Check each variation against exclusion set
+      for (const variant of variations) {
+        if (excludedMovieTitles.has(variant)) {
+          return { 
+            excluded: true, 
+            matchedWith: excludedMovieTitlesOriginal.get(variant), 
+            reason: `Direct match: "${variant}"` 
+          };
+        }
+      }
+      
+      // Fuzzy substring matching for all variations
+      for (const variant of variations) {
+        for (const excluded of excludedMovieTitles) {
+          // Check substring in both directions (for different lengths)
+          if (excluded.length >= 5 && variant.length >= 5) {
+            if (variant.includes(excluded) || excluded.includes(variant)) {
+              return { 
+                excluded: true, 
+                matchedWith: excludedMovieTitlesOriginal.get(excluded), 
+                reason: `Substring match: "${variant}" ~ "${excluded}"` 
+              };
+            }
+          }
+          
+          // Levenshtein-like similarity for close matches
+          if (excluded.length >= 6 && variant.length >= 6) {
+            const shorter = excluded.length < variant.length ? excluded : variant;
+            const longer = excluded.length < variant.length ? variant : excluded;
+            
+            // If the shorter one is 80%+ contained in the longer
+            if (longer.includes(shorter.slice(0, Math.floor(shorter.length * 0.8)))) {
+              return { 
+                excluded: true, 
+                matchedWith: excludedMovieTitlesOriginal.get(excluded), 
+                reason: `Partial match (80%+): "${variant}" ~ "${excluded}"` 
+              };
+            }
+          }
+        }
+      }
+      
+      return { excluded: false };
+    };
+    
+    // Log exclusion data with known problematic titles
+    const checkKnownTitles = ['drishyam', 'vikram', 'jersey', 'vedha'];
+    const foundKnownInExclusion: Record<string, string[]> = {};
+    checkKnownTitles.forEach(check => {
+      foundKnownInExclusion[check] = Array.from(excludedMovieTitles).filter(t => t.includes(check));
+    });
+    
+    logger.info('SMART_PICKS', '📋 Exclusion sets built', {
+      excludedMovieIdsCount: excludedMovieIds.length,
+      excludedTitlesCount: excludedMovieTitles.size,
+      sampleTitles: Array.from(excludedMovieTitles).slice(0, 30),
+      knownTitlesInExclusion: foundKnownInExclusion,
+    });
+
+    logger.info('SMART_PICKS', 'User rating breakdown (ALL excluded from recommendations)', {
       amazing: amazing.length,
       good: good.length,
+      meh: meh.length,
       awful: awful.length,
       notInterested: notInterested.length,
+      skipped: skipped.length,
       watchlist: watchlistMovies.length,
-      totalRatings: user.ratings.length,
+      totalRatings: allRatings.length, // Using allRatings count
       totalExcluded: excludedMovieIds.length,
     });
 
@@ -98,18 +250,21 @@ export async function POST(request: NextRequest) {
       .map((lang) => LANGUAGE_DESCRIPTIONS[lang] || lang)
       .join(', ');
 
-    // Build user prompt using config
+    // Build user prompt using config - include ALL rating categories for exclusion
     const userPrompt = buildMovieRecommendationPrompt({
       count,
       amazing: amazing.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
       good: good.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
+      meh: meh.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
       awful: awful.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
       notInterested: notInterested.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
+      skipped: skipped.map(r => ({ movieTitle: r.movieTitle, movieYear: parseInt(r.movieYear || '0') })),
       watchlistMovies: watchlistMovies.map(w => ({ movieTitle: w.movieTitle, movieYear: parseInt(w.movieYear || '0') })),
       languagePrefs,
       genres: user.genres || undefined,
       aiInstructions: user.aiInstructions || undefined,
       customUserQuery,
+      userFeedback, // Include user's AI feedback
     });
 
     const systemPrompt = MOVIE_RECOMMENDATIONS_SYSTEM_PROMPT;
@@ -365,7 +520,14 @@ export async function POST(request: NextRequest) {
     const TMDB_API_KEY = process.env.TMDB_API_KEY;
     let enrichedMovies: any[] = [];
 
-    for (const extracted of extractedTitles.slice(0, count)) {
+    for (const extracted of extractedTitles.slice(0, count * 2)) { // Process more to have buffer after filtering
+      // FIRST: Check if this extracted title is already in exclusion list (rated/watchlist)
+      const extractedCheck = isTitleExcluded(extracted.title);
+      if (extractedCheck.excluded) {
+        logger.warn('SMART_PICKS', `⚠️ EARLY FILTER: Skipping AI-recommended "${extracted.title}" - matched with user's "${extractedCheck.matchedWith}" (${extractedCheck.reason})`);
+        continue;
+      }
+      
       // Check if we already have this movie in our list
       const existingMovie = movies.find(m => 
         m.title.toLowerCase().includes(extracted.title.toLowerCase()) && 
@@ -373,7 +535,14 @@ export async function POST(request: NextRequest) {
       );
 
       if (existingMovie) {
+        // Double-check existing movie isn't excluded
+        const existingCheck = isTitleExcluded(existingMovie.title);
+        if (!excludedMovieIds.includes(existingMovie.id) && !existingCheck.excluded) {
         enrichedMovies.push(existingMovie);
+          logger.info('SMART_PICKS', `✅ Added from DB: "${existingMovie.title}" (ID: ${existingMovie.id})`);
+        } else {
+          logger.warn('SMART_PICKS', `⚠️ Skipping DB movie "${existingMovie.title}" - in exclusion list`);
+        }
         continue;
       }
 
@@ -423,8 +592,14 @@ export async function POST(request: NextRequest) {
                 },
               });
               
+              // Final check before adding - make sure it's not in exclusion list
+              const tmdbCheck = isTitleExcluded(newMovie.title);
+              if (!excludedMovieIds.includes(newMovie.id) && !tmdbCheck.excluded) {
               enrichedMovies.push(newMovie);
-              logger.info('SMART_PICKS', `✅ Added from TMDB: ${newMovie.title}`);
+                logger.info('SMART_PICKS', `✅ Added from TMDB: "${newMovie.title}" (ID: ${newMovie.id})`);
+              } else {
+                logger.warn('SMART_PICKS', `⚠️ TMDB movie "${newMovie.title}" excluded - matched with "${tmdbCheck.matchedWith}" (${tmdbCheck.reason})`);
+              }
             }
           }
         }
@@ -436,10 +611,22 @@ export async function POST(request: NextRequest) {
       if (enrichedMovies.length >= count) break;
     }
 
-    // If still not enough, add from existing movies
+    // If still not enough, add from existing movies (with exclusion check)
     if (enrichedMovies.length < count) {
-      const remaining = movies.filter(m => !enrichedMovies.find(em => em.id === m.id));
-      enrichedMovies.push(...remaining.slice(0, count - enrichedMovies.length));
+      const remaining = movies.filter(m => {
+        if (enrichedMovies.find(em => em.id === m.id)) return false;
+        if (excludedMovieIds.includes(m.id)) return false;
+        const check = isTitleExcluded(m.title);
+        if (check.excluded) {
+          logger.info('SMART_PICKS', `⚠️ Filtered remaining movie "${m.title}" - ${check.reason}`);
+          return false;
+        }
+        return true;
+      });
+      
+      const toAdd = remaining.slice(0, count - enrichedMovies.length);
+      toAdd.forEach(m => logger.info('SMART_PICKS', `✅ Added remaining: "${m.title}"`));
+      enrichedMovies.push(...toAdd);
     }
 
     logger.info('SMART_PICKS', '📊 FINAL ENRICHED MOVIE SELECTION', {
@@ -605,19 +792,56 @@ export async function POST(request: NextRequest) {
       count: enrichedMovies.length,
     });
 
-    // DOUBLE VALIDATION: Filter out ALL already-interacted movies (rated + watchlist)
+    // TRIPLE VALIDATION: Filter out ALL already-interacted movies (by ID AND by title)
     const beforeFilterCount = enrichedMovies.length;
-    enrichedMovies = enrichedMovies.filter(movie => !excludedMovieIds.includes(movie.id));
+    const filteredOutMovies: string[] = [];
+    const keptMovies: string[] = [];
+    
+    enrichedMovies = enrichedMovies.filter(movie => {
+      // Check by ID first
+      if (excludedMovieIds.includes(movie.id)) {
+        filteredOutMovies.push(`❌ ${movie.title} (ID: ${movie.id} in exclusion list)`);
+        return false;
+      }
+      
+      // Check by title with enhanced matching
+      const titleCheck = isTitleExcluded(movie.title);
+      if (titleCheck.excluded) {
+        filteredOutMovies.push(`❌ ${movie.title} → matched with "${titleCheck.matchedWith}" (${titleCheck.reason})`);
+        return false;
+      }
+      
+      // Also check original title if different
+      if (movie.originalTitle && movie.originalTitle !== movie.title) {
+        const originalTitleCheck = isTitleExcluded(movie.originalTitle);
+        if (originalTitleCheck.excluded) {
+          filteredOutMovies.push(`❌ ${movie.title}/${movie.originalTitle} → matched with "${originalTitleCheck.matchedWith}" (${originalTitleCheck.reason})`);
+          return false;
+        }
+      }
+      
+      // Movie passed all checks
+      keptMovies.push(`✅ ${movie.title} (ID: ${movie.id})`);
+      return true;
+    });
+    
     const filteredCount = beforeFilterCount - enrichedMovies.length;
 
-    if (filteredCount > 0) {
-      logger.warn('SMART_PICKS', '⚠️ DOUBLE VALIDATION: Perplexity recommended already-rated/watchlist movies!', {
+    // Always log what was kept and filtered
+    logger.info('SMART_PICKS', '🔍 TRIPLE VALIDATION RESULTS', {
         beforeCount: beforeFilterCount,
         afterCount: enrichedMovies.length,
         filteredOut: filteredCount,
-        excludedCount: excludedMovieIds.length,
+      filteredMovies: filteredOutMovies,
+      keptMovies: keptMovies,
+    });
+
+    if (filteredCount > 0) {
+      logger.warn('SMART_PICKS', '⚠️ Filtered out already-rated/watchlist movies', {
+        excludedIdCount: excludedMovieIds.length,
+        excludedTitleCount: excludedMovieTitles.size,
         breakdown: {
-          totalRated: user.ratings.length,
+          totalRated: allRatings.length,
           notInterested: notInterested.length,
           watchlist: watchlistMovies.length,
         },
@@ -626,8 +850,9 @@ export async function POST(request: NextRequest) {
     
     logger.info('SMART_PICKS', '✅ FINAL MOVIES AFTER EXCLUSION FILTER', {
       moviesReturning: enrichedMovies.length,
-      totalExcluded: excludedMovieIds.length,
-      verifiedNoOverlap: true,
+      movieTitles: enrichedMovies.map(m => m.title),
+      totalExcludedIds: excludedMovieIds.length,
+      totalExcludedTitles: excludedMovieTitles.size,
     });
 
     // Transform movies for frontend
@@ -670,7 +895,7 @@ export async function POST(request: NextRequest) {
       movies: transformedMovies,
       perplexityResponse: rawResponse,
       metadata: {
-        userRatings: user.ratings.length,
+        userRatings: allRatings.length,
         moviesFound: transformedMovies.length,
         duration: `${totalDuration}ms`,
       },

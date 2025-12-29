@@ -57,6 +57,8 @@ export async function GET(
       tagline: tvShow.tagline,
       summary: tvShow.overview,
       category: tvShow.genres?.[0] || 'Unknown',
+      type: 'tvshow', // Explicitly mark as TV show
+      mediaType: 'tv', // For compatibility with MovieCard
     };
 
     logger.info('TV_SHOW_DETAILS', 'TV show details fetched successfully', {

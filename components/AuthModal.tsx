@@ -34,7 +34,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
               transition={{ duration: 0.3 }}
             >
               <div className="text-5xl mb-4">🎬</div>
-              <h2 className="text-3xl font-bold text-white mb-2">Join CineMate</h2>
+              <h2 className="text-3xl font-bold text-white mb-2">Join CineVibe</h2>
               <p className="text-white/90 text-sm">
                 Sign in to rate movies, get personalized recommendations, and more!
               </p>

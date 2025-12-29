@@ -1,4 +1,4 @@
-# 🎬 CineMate Database Setup & Movie Population Guide
+# 🎬 CineVibe Database Setup & Movie Population Guide
 
 ## ✅ What's Been Fixed
 
@@ -33,7 +33,7 @@ The TMDB (The Movie Database) API is **FREE** and provides access to millions of
 2. Click **"Request an API Key"`
 3. Choose **"Developer"** (free tier)
 4. Fill in the form:
-   - **Application Name**: "CineMate" (or anything)
+   - **Application Name**: "CineVibe" (or anything)
    - **Application URL**: http://localhost:3000
    - **Application Summary**: "Personal movie recommender app"
 5. Accept terms and submit

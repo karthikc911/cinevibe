@@ -54,7 +54,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                 CM
               </div>
               <div className="hidden md:block">
-                <h1 className="text-xl font-bold text-white">CineMate</h1>
+                <h1 className="text-xl font-bold text-white">CineVibe</h1>
                 <p className="text-xs text-gray-400">
                   Discover & Rate Your Perfect Movies
                 </p>

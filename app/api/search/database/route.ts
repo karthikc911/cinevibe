@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { formatPosterUrl } from "@/lib/poster-utils";
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
         id: movie.id,
         title: movie.title,
         year: movie.year,
-        poster: movie.posterPath,
+        poster: formatPosterUrl(movie.posterPath),
         lang: movie.language,
         langs: [movie.language],
         imdb: movie.imdbRating || movie.voteAverage,

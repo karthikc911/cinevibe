@@ -195,7 +195,7 @@ export async function chatWithAI(
     messages: [
       {
         role: "system",
-        content: `You are CineMate, a friendly AI movie companion. You help users discover movies based on their preferences.
+        content: `You are CineVibe, a friendly AI movie companion. You help users discover movies based on their preferences.
 User's preferences:\n${preferenceContext}\n\nBe conversational, enthusiastic, and helpful.`,
       },
       ...conversationHistory,

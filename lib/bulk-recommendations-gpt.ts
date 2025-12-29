@@ -242,7 +242,7 @@ CRITICAL FILTERS (MUST FOLLOW):
 ════════════════════════════
 `;
 
-          const systemPrompt = `You are CineMate's expert movie recommender with deep knowledge of world cinema.
+          const systemPrompt = `You are CineVibe's expert movie recommender with deep knowledge of world cinema.
 
         CRITICAL INSTRUCTIONS:
         - You MUST generate EXACTLY ${recommendationCount} movie recommendations

@@ -3,27 +3,38 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/mobile-auth";
 
 // GET - Fetch user's watchlist
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    logger.info('WATCHLIST', 'GET request received', {
+      hasSession: !!session,
+      hasMobileToken: !!authHeader,
+      userEmail: currentUser?.email,
+    });
+    
+    if (!currentUser) {
       logger.warn('WATCHLIST', 'Unauthorized watchlist GET request', { session });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     
     // Get user by email to ensure we have the correct user ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
     if (!user) {
-      logger.error('WATCHLIST', 'User not found in database', { email: session.user.email });
+      logger.error('WATCHLIST', 'User not found in database', { email: currentUser.email });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    
+    logger.info('WATCHLIST', 'User found, fetching watchlist items', { userId: user.id });
     
     const watchlist = await prisma.watchlistItem.findMany({
       where: { userId: user.id },
@@ -33,13 +44,21 @@ export async function GET(request: NextRequest) {
     logger.info('WATCHLIST', 'Watchlist fetched successfully', { 
       userId: user.id,
       itemCount: watchlist.length,
+      items: watchlist.map(item => ({ id: item.movieId, title: item.movieTitle })),
     });
     
     return NextResponse.json({ watchlist });
-  } catch (error) {
-    logger.error('WATCHLIST', 'Get watchlist error', { error });
+  } catch (error: any) {
+    logger.error('WATCHLIST', 'Get watchlist error', { 
+      error: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
     return NextResponse.json(
-      { error: "Failed to fetch watchlist" },
+      { 
+        error: "Failed to fetch watchlist",
+        details: error.message,
+      },
       { status: 500 }
     );
   }
@@ -49,13 +68,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
     logger.info('WATCHLIST', 'POST request received', { 
       hasSession: !!session,
-      userEmail: session?.user?.email,
+      hasMobileToken: !!authHeader,
+      userEmail: currentUser?.email,
     });
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       logger.warn('WATCHLIST', 'Unauthorized watchlist POST request', { session });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -75,12 +97,12 @@ export async function POST(request: NextRequest) {
     
     // Get user by email to ensure we have the correct user ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
     if (!user) {
-      logger.error('WATCHLIST', 'User not found in database', { email: session.user.email });
+      logger.error('WATCHLIST', 'User not found in database', { email: currentUser.email });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     
@@ -150,8 +172,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       logger.warn('WATCHLIST', 'Unauthorized watchlist DELETE request', { session });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -169,12 +193,12 @@ export async function DELETE(request: NextRequest) {
     
     // Get user by email to ensure we have the correct user ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
     if (!user) {
-      logger.error('WATCHLIST', 'User not found in database', { email: session.user.email });
+      logger.error('WATCHLIST', 'User not found in database', { email: currentUser.email });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
     

@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { formatPosterUrl } from '@/lib/poster-utils';
 import { autoFixMovieData } from '@/lib/tmdb-helper';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 /**
  * POST /api/random-movies
@@ -14,17 +16,20 @@ export async function POST(request: NextRequest) {
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
+
+    if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     logger.info('RANDOM_MOVIES', 'Fetching random movies for user', {
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
     });
 
     // Get user's rated and not-interested movies, along with preferences
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: {
         id: true,
         languages: true,
@@ -50,13 +55,44 @@ export async function POST(request: NextRequest) {
       excludedCount: excludedMovieIds.length,
     });
 
+    // Convert language names to ISO codes for database query
+    // The database stores ISO 639-1 codes (en, hi, ta, etc.) but user preferences are full names
+    const languageNameToCode: Record<string, string> = {
+      'English': 'en',
+      'Hindi': 'hi',
+      'Tamil': 'ta',
+      'Telugu': 'te',
+      'Kannada': 'kn',
+      'Malayalam': 'ml',
+      'Korean': 'ko',
+      'Japanese': 'ja',
+      'Spanish': 'es',
+      'French': 'fr',
+      'German': 'de',
+      'Italian': 'it',
+      'Portuguese': 'pt',
+      'Chinese': 'zh',
+      'Thai': 'th',
+      'Turkish': 'tr',
+    };
+
+    // Map user's language names to ISO codes
+    const userLanguageCodes = user.languages
+      .map(lang => languageNameToCode[lang] || lang.toLowerCase().slice(0, 2))
+      .filter(Boolean);
+
+    logger.info('RANDOM_MOVIES', 'User language preferences', {
+      userLanguages: user.languages,
+      languageCodes: userLanguageCodes,
+    });
+
     // Build where clause based on user preferences
     const whereClause: any = {
       AND: [
         { id: { notIn: excludedMovieIds } },
         {
           OR: [
-            { language: { in: user.languages.length > 0 ? user.languages : undefined } },
+            { language: { in: userLanguageCodes.length > 0 ? userLanguageCodes : undefined } },
             { voteAverage: { gte: 6.5 } }, // Fallback to highly rated movies
           ],
         },

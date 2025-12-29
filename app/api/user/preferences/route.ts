@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/mobile-auth";
 
 /**
  * GET /api/user/preferences
@@ -11,13 +12,15 @@ import { logger } from "@/lib/logger";
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
 
-    if (!session?.user?.email) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: {
         languages: true,
         genres: true,
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
     }
 
     logger.info("USER_PREFERENCES", "User preferences fetched", {
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
       hasLanguages: user.languages.length > 0,
       hasGenres: user.genres.length > 0,
       hasAiInstructions: !!user.aiInstructions,
@@ -71,8 +74,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
 
-    if (!session?.user?.email) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -115,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     // Update user preferences
     const updatedUser = await prisma.user.update({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       data: {
         languages: languages,
         genres: genres || [],
@@ -131,7 +136,7 @@ export async function POST(request: NextRequest) {
     });
 
     logger.info("USER_PREFERENCES", "User preferences updated", {
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
       languages: languages.length,
       genres: genres?.length || 0,
       hasAiInstructions: !!aiInstructions,

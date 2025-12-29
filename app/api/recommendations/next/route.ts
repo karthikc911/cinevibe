@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getNextRecommendations } from "@/lib/bulk-recommendations-gpt";
 import { logger } from "@/lib/logger";
+import { formatPosterUrl } from "@/lib/poster-utils";
 
 /**
  * GET /api/recommendations/next?limit=10
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
       id: rec.id,
       title: rec.title,
       year: rec.year?.toString() || rec.releaseDate?.split('-')[0] || '',
-      poster: rec.posterPath ? `https://image.tmdb.org/t/p/w500${rec.posterPath}` : '',
+      poster: formatPosterUrl(rec.posterPath),
       imdb: rec.imdbRating || rec.voteAverage || 0,
       rt: rec.rtRating || Math.round((rec.voteAverage || 0) * 10),
       summary: rec.overview || '',

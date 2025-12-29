@@ -52,7 +52,11 @@ export async function POST(
       id: movie.id,
       title: movie.title,
       year: movie.year,
-      poster: movie.posterPath ? `https://image.tmdb.org/t/p/w500${movie.posterPath}` : '',
+      poster: movie.posterPath 
+        ? (movie.posterPath.startsWith('http') 
+            ? movie.posterPath 
+            : `https://image.tmdb.org/t/p/w500${movie.posterPath}`)
+        : '',
       lang: movie.language,
       langs: movie.genres || [],
       imdb: movie.imdbRating || movie.voteAverage,

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🌐 CineMate Network Access Setup"
+echo "🌐 CineVibe Network Access Setup"
 echo "================================"
 echo ""
 echo "To allow WiFi users to authenticate with Google OAuth,"

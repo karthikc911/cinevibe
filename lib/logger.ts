@@ -1,5 +1,5 @@
 /**
- * Centralized Logger for CineMate
+ * Centralized Logger for CineVibe
  * Info-level logging for both frontend and backend
  * Edge Runtime compatible - console only (no file logging in Edge)
  */

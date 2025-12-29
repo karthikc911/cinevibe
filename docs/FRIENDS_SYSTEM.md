@@ -2,7 +2,7 @@
 
 ## Overview
 
-The CineMate Friends System allows users to connect with each other, send friend requests, share movie recommendations, and maintain threaded conversations about movies.
+The CineVibe Friends System allows users to connect with each other, send friend requests, share movie recommendations, and maintain threaded conversations about movies.
 
 ## Features
 

@@ -1,4 +1,4 @@
-# 🎬 CineMate Complete Backend Setup - Summary
+# 🎬 CineVibe Complete Backend Setup - Summary
 
 ## 🎉 What's Been Built
 
@@ -144,7 +144,7 @@ User                    -- User profiles with OAuth
 
 ---
 
-## 🤖 How RAG Works in CineMate
+## 🤖 How RAG Works in CineVibe
 
 ```
 1. User rates movies
@@ -440,5 +440,5 @@ curl https://api.openai.com/v1/models \
 
 **Happy Building! 🚀**
 
-*CineMate - Your AI-Powered Movie Companion*
+*CineVibe - Your AI-Powered Movie Companion*
 

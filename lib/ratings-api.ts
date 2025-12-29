@@ -14,6 +14,14 @@ export async function saveRatingAPI(
   rating: Rating
 ): Promise<boolean> {
   try {
+    console.log('📤 Saving rating via API:', { 
+      movieId: movie.id, 
+      movieTitle: movie.title, 
+      movieYear: movie.year, 
+      rating,
+      movieObject: movie 
+    });
+    
     const response = await fetch("/api/ratings", {
       method: "POST",
       headers: {
@@ -28,14 +36,25 @@ export async function saveRatingAPI(
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error("Failed to save rating:", error);
+      let error = { message: 'Unknown error' };
+      try {
+        error = await response.json();
+      } catch (e) {
+        console.error("Could not parse error response:", e);
+      }
+      console.error("❌ Failed to save rating:", {
+        status: response.status,
+        statusText: response.statusText,
+        error,
+      });
       return false;
     }
 
+    const result = await response.json();
+    console.log('✅ Rating saved successfully:', result);
     return true;
   } catch (error) {
-    console.error("Error saving rating:", error);
+    console.error("❌ Error saving rating:", error);
     return false;
   }
 }

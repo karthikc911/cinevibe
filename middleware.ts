@@ -21,6 +21,7 @@ export async function middleware(request: NextRequest) {
   const protectedPaths = [
     '/onboarding',
     '/rate',
+    '/my-ratings',
     '/watchlist',
     '/friends',
     '/profile',
@@ -66,6 +67,7 @@ export const config = {
     '/api/:path*',
     '/onboarding',
     '/rate',
+    '/my-ratings',
     '/watchlist',
     '/friends',
     '/profile',

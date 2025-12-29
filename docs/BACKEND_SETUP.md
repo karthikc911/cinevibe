@@ -1,4 +1,4 @@
-# 🚀 CineMate Backend Setup Guide
+# 🚀 CineVibe Backend Setup Guide
 
 ## Overview
 
@@ -288,5 +288,5 @@ Once you complete the setup steps, you'll have:
 - 🧠 Learning system that improves over time
 - 💬 AI chat about movies
 
-Enjoy building with CineMate! 🎬
+Enjoy building with CineVibe! 🎬
 

@@ -131,7 +131,7 @@ export default function OnboardingPage() {
                 CM
               </div>
               <h1 className="text-3xl font-bold text-white mb-2">
-                Welcome to CineMate! 🎬
+                Welcome to CineVibe! 🎬
               </h1>
               <p className="text-gray-400">
                 Let's personalize your movie experience
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
                 </>
               ) : (
                 <>
-                  Continue to CineMate
+                  Continue to CineVibe
                   <span className="ml-2">→</span>
                 </>
               )}

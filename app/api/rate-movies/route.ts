@@ -3,7 +3,9 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { formatPosterUrl } from '@/lib/poster-utils';
 import OpenAI from 'openai';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY!;
 const PERPLEXITY_MODEL = 'sonar-pro';
@@ -14,22 +16,28 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
 
   try {
-    // Check authentication
+    // Check authentication - support both web session and mobile token
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
+    
+    if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     logger.info('RATE_MOVIES', 'Generating movies for rating', {
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
       timestamp: new Date().toISOString(),
     });
 
-    // Get user with preferences
+    // Get user with preferences, ratings, and watchlist
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       include: {
         ratings: {
+          select: { movieId: true },
+        },
+        watchlist: {
           select: { movieId: true },
         },
       },
@@ -41,6 +49,18 @@ export async function POST(request: NextRequest) {
 
     // Get already rated movie IDs
     const ratedMovieIds = user.ratings.map((r) => r.movieId);
+    
+    // Get watchlist movie IDs
+    const watchlistMovieIds = user.watchlist.map((w) => w.movieId);
+    
+    // Combine both to exclude
+    const excludeMovieIds = [...new Set([...ratedMovieIds, ...watchlistMovieIds])];
+    
+    logger.info('RATE_MOVIES', 'Excluding movies', {
+      ratedCount: ratedMovieIds.length,
+      watchlistCount: watchlistMovieIds.length,
+      totalExcluded: excludeMovieIds.length,
+    });
 
     // Build Perplexity query
     const languageDescriptions: Record<string, string> = {
@@ -163,14 +183,14 @@ export async function POST(request: NextRequest) {
       titles: extractedTitles.map(t => `${t.title} (${t.year})`),
     });
 
-    // Query database for movies
+    // Query database for movies (exclude rated AND watchlist)
     const moviesInDb = await prisma.movie.findMany({
       where: {
         OR: extractedTitles.map(({ title, year }) => ({
           title: { contains: title, mode: 'insensitive' as const },
           year: { in: [year - 1, year, year + 1] },
         })),
-        id: { notIn: ratedMovieIds }, // Exclude already rated movies
+        id: { notIn: excludeMovieIds }, // Exclude rated AND watchlist movies
       },
       take: 20,
     });
@@ -203,6 +223,12 @@ export async function POST(request: NextRequest) {
 
         if (searchData.results && searchData.results.length > 0) {
           const movie = searchData.results[0];
+          
+          // Skip if this movie is already rated or in watchlist
+          if (excludeMovieIds.includes(movie.id)) {
+            logger.info('RATE_MOVIES', `Skipping ${movie.title} - already rated or in watchlist`);
+            continue;
+          }
 
           // Fetch detailed info
           const detailsUrl = `${TMDB_BASE_URL}/movie/${movie.id}?api_key=${TMDB_API_KEY}`;
@@ -251,7 +277,7 @@ export async function POST(request: NextRequest) {
       id: movie.id,
       title: movie.title,
       year: movie.year,
-      poster: movie.posterPath,
+      poster: formatPosterUrl(movie.posterPath),
       lang: movie.language,
       langs: [movie.language],
       imdb: movie.imdbRating || movie.voteAverage,

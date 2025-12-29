@@ -29,45 +29,113 @@ export default function WatchlistPage() {
       try {
         console.log('🎬 Fetching movie watchlist from database...');
         const response = await fetch("/api/watchlist");
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Movie watchlist fetched:', data.watchlist?.length || 0, 'items');
-          
-          // Fetch full movie details for each watchlist item
-          const moviesWithDetails = await Promise.all(
-            (data.watchlist || []).map(async (item: any) => {
-              try {
-                const movieResponse = await fetch(`/api/movies/${item.movieId}`);
-                if (movieResponse.ok) {
-                  const movieData = await movieResponse.json();
-                  console.log('✅ Movie fetched:', item.movieTitle, 'with poster:', movieData.movie?.poster);
-                  return {
-                    ...movieData.movie,
-                    id: item.movieId,
-                    title: item.movieTitle,
-                    year: item.movieYear,
-                    type: 'movie', // Explicitly mark as movie
-                    mediaType: 'movie',
-                  };
-                }
-              } catch (error) {
-                console.error(`❌ Error fetching movie ${item.movieId}:`, error);
-              }
-              // Fallback if fetch fails
-              console.warn(`⚠️ Using fallback data for movie ${item.movieId}: ${item.movieTitle}`);
-              return null;
-            })
-          );
-          
-          // Filter out null values and log final count
-          const validMovies = moviesWithDetails.filter(Boolean);
-          console.log('✅ Valid movies with full data:', validMovies.length);
-          
-          setMovieWatchlist(validMovies);
-          console.log('✅ Movie watchlist with details:', validMovies.length, 'items');
-        } else {
-          console.error('❌ Failed to fetch movie watchlist:', response.status);
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('❌ Failed to fetch movie watchlist:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData,
+          });
+          setLoadingMovies(false);
+          return;
         }
+        
+        const data = await response.json();
+        console.log('✅ Movie watchlist fetched:', data.watchlist?.length || 0, 'items');
+        
+        if (!data.watchlist || data.watchlist.length === 0) {
+          console.log('ℹ️ No movies in watchlist');
+          setMovieWatchlist([]);
+          setLoadingMovies(false);
+          return;
+        }
+        
+        // Fetch full movie details for each watchlist item
+        const moviesWithDetails = await Promise.all(
+          (data.watchlist || []).map(async (item: any) => {
+            try {
+              const movieResponse = await fetch(`/api/movies/${item.movieId}`);
+              if (movieResponse.ok) {
+                const movieData = await movieResponse.json();
+                console.log('✅ Movie fetched:', item.movieTitle);
+                
+                // Check if the movie title matches what we expected
+                const fetchedTitle = movieData.movie?.title?.toLowerCase()?.trim();
+                const expectedTitle = item.movieTitle?.toLowerCase()?.trim();
+                
+                // Compare titles - if they don't match, fix the data
+                const titlesMatch = fetchedTitle === expectedTitle || 
+                  fetchedTitle?.includes(expectedTitle) || 
+                  expectedTitle?.includes(fetchedTitle);
+                
+                if (!titlesMatch && expectedTitle) {
+                  console.warn(`⚠️ Title mismatch for ID ${item.movieId}!`);
+                  console.warn(`  Expected: "${item.movieTitle}"`);
+                  console.warn(`  Got: "${movieData.movie?.title}"`);
+                  console.log('🔧 Attempting to fix movie data...');
+                  
+                  // Call the search-and-fix API to correct the data
+                  try {
+                    const fixResponse = await fetch('/api/movies/search-and-fix', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        movieId: item.movieId,
+                        expectedTitle: item.movieTitle,
+                        expectedYear: item.movieYear,
+                      }),
+                    });
+                    
+                    if (fixResponse.ok) {
+                      const fixData = await fixResponse.json();
+                      console.log('✅ Movie data fixed:', fixData.movie?.title);
+                      
+                      return {
+                        ...fixData.movie,
+                        id: fixData.movie?.id || item.movieId,
+                        title: fixData.movie?.title || item.movieTitle,
+                        year: fixData.movie?.year || item.movieYear,
+                        type: 'movie',
+                        mediaType: 'movie',
+                      };
+                    }
+                  } catch (fixError) {
+                    console.error('❌ Failed to fix movie:', fixError);
+                  }
+                }
+                
+                console.log('  - Poster URL:', movieData.movie?.poster);
+                
+                const enrichedMovie = {
+                  ...movieData.movie,
+                  id: item.movieId,
+                  title: item.movieTitle,
+                  year: item.movieYear,
+                  type: 'movie',
+                  mediaType: 'movie',
+                };
+                
+                console.log('  - Final movie object poster:', enrichedMovie.poster);
+                return enrichedMovie;
+              } else {
+                console.warn(`⚠️ Failed to fetch movie ${item.movieId}, status: ${movieResponse.status}`);
+              }
+            } catch (error) {
+              console.error(`❌ Error fetching movie ${item.movieId}:`, error);
+            }
+            // Fallback if fetch fails
+            console.warn(`⚠️ Using fallback data for movie ${item.movieId}: ${item.movieTitle}`);
+            return null;
+          })
+        );
+        
+        // Filter out null values and log final count
+        const validMovies = moviesWithDetails.filter(Boolean);
+        console.log('✅ Valid movies with full data:', validMovies.length);
+        
+        setMovieWatchlist(validMovies);
+        console.log('✅ Movie watchlist with details:', validMovies.length, 'items');
       } catch (error) {
         console.error("❌ Error fetching movie watchlist:", error);
       } finally {
@@ -93,18 +161,23 @@ export default function WatchlistPage() {
                 const showResponse = await fetch(`/api/tvshows/${item.tvShowId}`);
                 if (showResponse.ok) {
                   const showData = await showResponse.json();
+                  console.log('✅ TV Show fetched:', item.tvShowName);
+                  console.log('  - Show data:', showData);
                   return {
                     ...showData,
                     id: item.tvShowId,
                     name: item.tvShowName,
                     title: item.tvShowName,
                     year: item.tvShowYear,
+                    type: 'tvshow', // Explicitly mark as TV show
+                    mediaType: 'tv', // For compatibility
                   };
                 }
               } catch (error) {
-                console.error(`Error fetching TV show ${item.tvShowId}:`, error);
+                console.error(`❌ Error fetching TV show ${item.tvShowId}:`, error);
               }
               // Fallback if fetch fails
+              console.warn(`⚠️ Using fallback for TV show: ${item.tvShowName}`);
               return {
                 id: item.tvShowId,
                 name: item.tvShowName,
@@ -112,6 +185,8 @@ export default function WatchlistPage() {
                 year: item.tvShowYear,
                 poster: '',
                 lang: 'Unknown',
+                type: 'tvshow', // Explicitly mark as TV show
+                mediaType: 'tv', // For compatibility
               };
             })
           );
@@ -180,33 +255,13 @@ export default function WatchlistPage() {
     }
   };
 
-  // Use database watchlist instead of Zustand store
+  // Use database watchlist
   const moviesOnly = movieWatchlist;
-  const tvShowsFromWatchlist = tvShowWatchlist;
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('📊 Watchlist Debug:', {
-      moviesFromDB: movieWatchlist.length,
-      tvShowsFromDB: tvShowWatchlist.length,
-      loadingMovies,
-      loadingTvShows,
-      movieTitles: movieWatchlist.map((m: any) => m.title),
-      tvShowTitles: tvShowWatchlist.map((s: any) => s.name || s.title)
-    });
-  }, [movieWatchlist, tvShowWatchlist, loadingMovies, loadingTvShows]);
-  
-  // Combine TV shows from both sources
-  const allTvShows = [...tvShowWatchlist, ...tvShowsFromWatchlist];
-  
-  // Remove duplicates by id
-  const uniqueTvShows = Array.from(
-    new Map(allTvShows.map(show => [show.id, show])).values()
-  );
+  const tvShowsOnly = tvShowWatchlist;
 
   // Apply tab filtering
   const filteredMovies = activeTab === "tvshows" ? [] : moviesOnly;
-  const filteredTvShows = activeTab === "movies" ? [] : uniqueTvShows;
+  const filteredTvShows = activeTab === "movies" ? [] : tvShowsOnly;
 
   const tabs: { id: WatchlistTab; label: string; icon: React.ReactNode }[] = [
     { id: "all", label: "All", icon: null },
@@ -214,7 +269,7 @@ export default function WatchlistPage() {
     { id: "tvshows", label: "TV Shows", icon: <Tv className="w-4 h-4" /> },
   ];
 
-  const totalCount = moviesOnly.length + uniqueTvShows.length;
+  const totalCount = moviesOnly.length + tvShowsOnly.length;
 
   // Show loading state
   if (loadingMovies || loadingTvShows) {
@@ -270,7 +325,7 @@ export default function WatchlistPage() {
             {tab.icon}
             {tab.label}
             {tab.id === "movies" && ` (${moviesOnly.length})`}
-            {tab.id === "tvshows" && ` (${uniqueTvShows.length})`}
+            {tab.id === "tvshows" && ` (${tvShowsOnly.length})`}
           </button>
         ))}
       </div>

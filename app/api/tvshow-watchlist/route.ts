@@ -3,18 +3,21 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 // GET - Fetch user's TV show watchlist
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
@@ -48,13 +51,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
     logger.info('TV_SHOW_WATCHLIST', 'POST request received', { 
       hasSession: !!session,
-      userEmail: session?.user?.email,
+      hasMobileToken: !!authHeader,
+      userEmail: currentUser?.email,
     });
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       logger.warn('TV_SHOW_WATCHLIST', 'Unauthorized POST request');
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -78,13 +84,13 @@ export async function POST(request: NextRequest) {
     
     // Get user by email to ensure we have the correct user ID
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
     if (!user) {
       logger.error('TV_SHOW_WATCHLIST', 'User not found in database', { 
-        email: session.user.email 
+        email: currentUser.email 
       });
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
@@ -155,8 +161,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -171,7 +179,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 

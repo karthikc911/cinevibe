@@ -87,7 +87,11 @@ export async function GET(request: NextRequest) {
       id: movie.id,
       title: movie.title,
       year: movie.year?.toString() || movie.releaseDate?.split('-')[0] || '',
-      poster: movie.posterPath ? `https://image.tmdb.org/t/p/w500${movie.posterPath}` : '',
+      poster: movie.posterPath 
+        ? (movie.posterPath.startsWith('http') 
+            ? movie.posterPath 
+            : `https://image.tmdb.org/t/p/w500${movie.posterPath}`)
+        : '',
       imdb: movie.imdbRating || movie.voteAverage || 0,
       rt: movie.rtRating || Math.round((movie.voteAverage || 0) * 10),
       summary: movie.overview || '',

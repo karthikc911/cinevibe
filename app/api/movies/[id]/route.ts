@@ -4,20 +4,11 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { enrichMovieWithMetadata } from '@/lib/movie-metadata-fetcher';
+import { formatPosterUrl } from '@/lib/poster-utils';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
-
-const formatPosterUrl = (posterPath: string | null): string => {
-  if (!posterPath) return '';
-  if (posterPath.startsWith('http://') || posterPath.startsWith('https://')) {
-    return posterPath;
-  }
-  if (posterPath.startsWith('/')) {
-    return `https://image.tmdb.org/t/p/w500${posterPath}`;
-  }
-  return '';
-};
 
 export async function GET(
   request: NextRequest,
@@ -25,7 +16,10 @@ export async function GET(
 ) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
+    
+    if (!currentUser) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -37,7 +31,7 @@ export async function GET(
 
     logger.info('GET_MOVIE', `Fetching movie details`, {
       movieId,
-      userEmail: session.user.email,
+      userEmail: currentUser.email,
     });
 
     // Step 1: Check local database
@@ -45,10 +39,14 @@ export async function GET(
       where: { id: movieId },
     });
 
-    if (movie) {
+    // Check if we need to refresh from TMDB (for data quality)
+    const needsRefresh = movie && (!movie.language || movie.language === '' || !movie.posterPath);
+
+    if (movie && !needsRefresh) {
       logger.info('GET_MOVIE', 'Movie found in database', {
         movieId,
         title: movie.title,
+        language: movie.language,
       });
 
       // Enrich if missing metadata
@@ -59,7 +57,16 @@ export async function GET(
           where: { id: movieId },
         });
       }
-    } else {
+    } else if (needsRefresh) {
+      logger.info('GET_MOVIE', 'Movie needs refresh from TMDB', {
+        movieId,
+        reason: !movie?.language ? 'missing language' : 'missing poster',
+      });
+      // Fall through to TMDB fetch to refresh data
+      movie = null;
+    }
+    
+    if (!movie) {
       // Step 2: Fetch from TMDB if not in database
       logger.info('GET_MOVIE', 'Movie not in database, fetching from TMDB', {
         movieId,
@@ -80,33 +87,42 @@ export async function GET(
 
       const tmdbMovie = await tmdbResponse.json();
 
-      // Step 3: Save to database
+      logger.info('GET_MOVIE', 'TMDB movie data fetched', {
+        movieId: tmdbMovie.id,
+        title: tmdbMovie.title,
+        original_language: tmdbMovie.original_language,
+        genres: tmdbMovie.genres?.map((g: any) => g.name),
+      });
+
+      // Step 3: Save/Update database with fresh TMDB data
+      const movieData = {
+        id: tmdbMovie.id,
+        title: tmdbMovie.title || 'Untitled',
+        originalTitle: tmdbMovie.original_title,
+        overview: tmdbMovie.overview,
+        posterPath: tmdbMovie.poster_path,
+        backdropPath: tmdbMovie.backdrop_path,
+        releaseDate: tmdbMovie.release_date || null,
+        year: tmdbMovie.release_date ? new Date(tmdbMovie.release_date).getFullYear() : null,
+        voteAverage: tmdbMovie.vote_average || 0,
+        voteCount: tmdbMovie.vote_count || 0,
+        popularity: tmdbMovie.popularity || 0,
+        language: tmdbMovie.original_language || 'en',
+        genres: tmdbMovie.genres?.map((g: any) => g.name) || [],
+        runtime: tmdbMovie.runtime,
+        tagline: tmdbMovie.tagline,
+        imdbRating: null,
+        rtRating: null,
+        imdbVoterCount: null,
+        userReviewSummary: null,
+        budget: tmdbMovie.budget ? BigInt(tmdbMovie.budget) : null,
+        boxOffice: tmdbMovie.revenue ? BigInt(tmdbMovie.revenue) : null,
+      };
+
       movie = await prisma.movie.upsert({
         where: { id: movieId },
-        create: {
-          id: tmdbMovie.id,
-          title: tmdbMovie.title || 'Untitled',
-          originalTitle: tmdbMovie.original_title,
-          overview: tmdbMovie.overview,
-          posterPath: tmdbMovie.poster_path,
-          backdropPath: tmdbMovie.backdrop_path,
-          releaseDate: tmdbMovie.release_date || null,
-          year: tmdbMovie.release_date ? new Date(tmdbMovie.release_date).getFullYear() : null,
-          voteAverage: tmdbMovie.vote_average || 0,
-          voteCount: tmdbMovie.vote_count || 0,
-          popularity: tmdbMovie.popularity || 0,
-          language: tmdbMovie.original_language || 'en',
-          genres: tmdbMovie.genres?.map((g: any) => g.name) || [],
-          runtime: tmdbMovie.runtime,
-          tagline: tmdbMovie.tagline,
-          imdbRating: null,
-          rtRating: null,
-          imdbVoterCount: null,
-          userReviewSummary: null,
-          budget: tmdbMovie.budget ? BigInt(tmdbMovie.budget) : null,
-          boxOffice: tmdbMovie.revenue ? BigInt(tmdbMovie.revenue) : null,
-        },
-        update: {},
+        create: movieData,
+        update: movieData, // Update with fresh data if exists
       });
 
       logger.info('GET_MOVIE', 'Movie saved to database', {
@@ -128,11 +144,13 @@ export async function GET(
     }
 
     // Transform to frontend format
+    const posterUrl = formatPosterUrl(movie.posterPath);
+    
     const transformedMovie = {
       id: movie.id,
       title: movie.title,
       year: movie.year,
-      poster: formatPosterUrl(movie.posterPath),
+      poster: posterUrl,
       lang: movie.language,
       langs: [movie.language],
       imdb: movie.imdbRating || movie.voteAverage,
@@ -153,6 +171,11 @@ export async function GET(
     logger.info('GET_MOVIE', 'Movie details returned successfully', {
       movieId: transformedMovie.id,
       title: transformedMovie.title,
+      language: transformedMovie.language,
+      lang: transformedMovie.lang,
+      posterPath: movie.posterPath,
+      formattedPoster: posterUrl,
+      genres: transformedMovie.genres,
     });
 
     return NextResponse.json({ movie: transformedMovie });

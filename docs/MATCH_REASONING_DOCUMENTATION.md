@@ -732,5 +732,5 @@ For questions or issues with the match reasoning system:
 ---
 
 **Last Updated:** 2025-11-15
-**Maintained By:** CineMate Dev Team
+**Maintained By:** CineVibe Dev Team
 

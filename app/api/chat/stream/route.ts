@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
       )
       .join("\n");
 
-    const systemPrompt = `You are CineMate AI, a friendly and knowledgeable movie companion. You help users discover movies based on their preferences.
+    const systemPrompt = `You are CineVibe AI, a friendly and knowledgeable movie companion. You help users discover movies based on their preferences.
 
 User's preferences (with relevance to current conversation):
 ${preferenceContext}

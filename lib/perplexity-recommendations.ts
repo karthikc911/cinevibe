@@ -232,7 +232,7 @@ async function refineWithGPT(
 
   const recommendationCount = filters.count || 10;
 
-  const systemPrompt = `You are CineMate's taste analysis expert. You receive raw movie data and apply personalized taste logic.
+  const systemPrompt = `You are CineVibe's taste analysis expert. You receive raw movie data and apply personalized taste logic.
 
 Your task: Transform the movie data into EXACTLY ${recommendationCount} structured JSON recommendations.
 

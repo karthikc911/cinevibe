@@ -3,19 +3,22 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/mobile-auth";
 
 // GET /api/tvshow-ratings - Get all TV show ratings for current user
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    if (!currentUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     // Get user ID from email
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
@@ -46,19 +49,27 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const currentUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    logger.info('TV_SHOW_RATINGS', 'POST request received', {
+      hasSession: !!session,
+      hasMobileToken: !!authHeader,
+      userEmail: currentUser?.email,
+    });
+    
+    if (!currentUser) {
+      return NextResponse.json({ error: "Unauthorized", message: "You must be logged in to rate TV shows" }, { status: 401 });
     }
 
     // Get user ID from email
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: currentUser.email },
       select: { id: true },
     });
 
     if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+      return NextResponse.json({ error: "User not found", message: "User account not found" }, { status: 404 });
     }
 
     const body = await request.json();
@@ -68,14 +79,43 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       tvShowId,
       tvShowName,
+      tvShowYear,
       rating,
+      bodyReceived: body,
     });
 
-    // Validate inputs
-    if (!tvShowId || !tvShowName || !rating) {
-      logger.warn('TV_SHOW_RATINGS', 'Missing required fields', { body });
+    // Validate inputs with detailed error messages
+    if (!tvShowId) {
+      logger.warn('TV_SHOW_RATINGS', 'Missing tvShowId', { body });
       return NextResponse.json(
-        { error: "Missing required fields: tvShowId, tvShowName, rating" },
+        { error: "Missing required fields", message: "tvShowId is required" },
+        { status: 400 }
+      );
+    }
+    
+    if (!tvShowName) {
+      logger.warn('TV_SHOW_RATINGS', 'Missing tvShowName', { body });
+      return NextResponse.json(
+        { error: "Missing required fields", message: "tvShowName is required" },
+        { status: 400 }
+      );
+    }
+    
+    if (!rating) {
+      logger.warn('TV_SHOW_RATINGS', 'Missing rating', { body });
+      return NextResponse.json(
+        { error: "Missing required fields", message: "rating is required" },
+        { status: 400 }
+      );
+    }
+
+    // Ensure tvShowId is a valid number
+    const parsedTvShowId = typeof tvShowId === 'number' ? tvShowId : parseInt(String(tvShowId), 10);
+    
+    if (isNaN(parsedTvShowId)) {
+      logger.error('TV_SHOW_RATINGS', 'Invalid tvShowId format', { tvShowId, typeof: typeof tvShowId });
+      return NextResponse.json(
+        { error: "Invalid tvShowId", message: `tvShowId must be a number, got: ${typeof tvShowId}` },
         { status: 400 }
       );
     }
@@ -85,19 +125,19 @@ export async function POST(request: NextRequest) {
       where: {
         userId_tvShowId: {
           userId: user.id,
-          tvShowId: parseInt(tvShowId),
+          tvShowId: parsedTvShowId,
         },
       },
       update: {
         rating,
-        tvShowName,
-        tvShowYear: tvShowYear ? parseInt(tvShowYear) : null,
+        tvShowName: String(tvShowName),
+        tvShowYear: tvShowYear ? parseInt(String(tvShowYear)) : null,
       },
       create: {
         userId: user.id,
-        tvShowId: parseInt(tvShowId),
-        tvShowName,
-        tvShowYear: tvShowYear ? parseInt(tvShowYear) : null,
+        tvShowId: parsedTvShowId,
+        tvShowName: String(tvShowName),
+        tvShowYear: tvShowYear ? parseInt(String(tvShowYear)) : null,
         rating,
       },
     });
@@ -105,16 +145,17 @@ export async function POST(request: NextRequest) {
     logger.info('TV_SHOW_RATINGS', '✓ Rating saved successfully', {
       userId: user.id,
       tvShowId: savedRating.tvShowId,
+      tvShowName: savedRating.tvShowName,
       rating: savedRating.rating,
     });
 
-    return NextResponse.json({ rating: savedRating });
+    return NextResponse.json({ rating: savedRating, success: true });
   } catch (error: any) {
     logger.error('TV_SHOW_RATINGS', '❌ Save rating error', {
       error: error.message,
       stack: error.stack,
     });
-    return NextResponse.json({ error: "Failed to save rating" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to save rating", message: error.message || "Database error" }, { status: 500 });
   }
 }
 

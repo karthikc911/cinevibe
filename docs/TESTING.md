@@ -1,6 +1,6 @@
-# 🧪 CineMate Testing Guide
+# 🧪 CineVibe Testing Guide
 
-Complete guide for running unit tests, integration tests, and API tests for the CineMate application.
+Complete guide for running unit tests, integration tests, and API tests for the CineVibe application.
 
 ---
 
@@ -20,7 +20,7 @@ Complete guide for running unit tests, integration tests, and API tests for the 
 
 ## 🎯 Overview
 
-CineMate uses a comprehensive testing strategy covering:
+CineVibe uses a comprehensive testing strategy covering:
 
 - **Unit Tests**: Test individual components and functions
 - **Integration Tests**: Test complete user flows
@@ -577,5 +577,5 @@ If you encounter issues:
 ---
 
 **Last Updated**: November 13, 2025  
-**Maintained By**: CineMate Development Team
+**Maintained By**: CineVibe Development Team
 

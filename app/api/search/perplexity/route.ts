@@ -442,7 +442,23 @@ export async function POST(request: NextRequest) {
 
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    
+    // Support both session and mobile token auth
+    let userEmail: string | null = null;
+    
+    if (session?.user?.email) {
+      userEmail = session.user.email;
+    } else if (authHeader?.startsWith('Bearer ')) {
+      // Try to validate mobile token
+      const { getCurrentUser } = await import('@/lib/mobile-auth');
+      const mobileUser = await getCurrentUser(session, authHeader);
+      if (mobileUser?.email) {
+        userEmail = mobileUser.email;
+      }
+    }
+    
+    if (!userEmail) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -454,12 +470,12 @@ export async function POST(request: NextRequest) {
 
     logger.info('SEARCH_PERPLEXITY', '🔍 Starting Perplexity search', {
       query,
-      userEmail: session.user.email,
+      userEmail,
     });
 
     // Load user profile settings and ratings
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: userEmail },
       select: {
         id: true,
         languages: true,

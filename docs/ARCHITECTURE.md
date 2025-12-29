@@ -1,4 +1,4 @@
-# CineMate - Architecture & Deployment Guide
+# CineVibe - Architecture & Deployment Guide
 
 ## 📋 Table of Contents
 1. [High-Level Architecture](#high-level-architecture)
@@ -14,11 +14,11 @@
 
 ## 🏗️ High-Level Architecture
 
-CineMate is a **full-stack monolithic Next.js application** with a clear separation between frontend and backend concerns. The architecture follows a modern **JAMstack + API** pattern with server-side rendering and API routes.
+CineVibe is a **full-stack monolithic Next.js application** with a clear separation between frontend and backend concerns. The architecture follows a modern **JAMstack + API** pattern with server-side rendering and API routes.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        CineMate                              │
+│                        CineVibe                              │
 │              Next.js 15 Full-Stack Application               │
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -539,7 +539,7 @@ Users can provide custom instructions in their profile:
 
 ### Overview
 
-CineMate is a **monolithic Next.js application** that combines frontend and backend. For optimal deployment:
+CineVibe is a **monolithic Next.js application** that combines frontend and backend. For optimal deployment:
 
 - **Frontend + API Routes**: Deploy to Vercel (recommended)
 - **Database**: Keep on Supabase (already configured)
@@ -949,7 +949,7 @@ jobs:
 
 ## 📝 Summary
 
-**CineMate** is a modern, full-stack movie recommendation application built with:
+**CineVibe** is a modern, full-stack movie recommendation application built with:
 - **Frontend**: React + Next.js + Tailwind CSS
 - **Backend**: Next.js API Routes + Prisma ORM
 - **Database**: PostgreSQL (Supabase)
@@ -967,5 +967,5 @@ This monolithic architecture is perfect for rapid development and easy deploymen
 
 **Version**: 1.0.0  
 **Last Updated**: November 2024  
-**Maintained By**: CineMate Team
+**Maintained By**: CineVibe Team
 

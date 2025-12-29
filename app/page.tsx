@@ -45,6 +45,13 @@ export default function HomePage() {
   // Content type toggle
   const [contentType, setContentType] = useState<'movies' | 'tvshows'>('movies');
   
+  // AI Feedback
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackType, setFeedbackType] = useState<'movie' | 'tvshow'>('movie');
+  const [savingFeedback, setSavingFeedback] = useState(false);
+  const [userFeedback, setUserFeedback] = useState<Array<{ id: string; feedback: string; feedbackType: string }>>([]);
+  
   // Trending Section
   const [trendingMovies, setTrendingMovies] = useState<Movie[]>([]);
   const [trendingWindow, setTrendingWindow] = useState<'day' | 'week'>('day');
@@ -526,108 +533,115 @@ export default function HomePage() {
         movieObject: movie
       });
 
+      const requestBody = isTvShow 
+        ? {
+            tvShowId: movie.id,
+            tvShowName: title,
+            tvShowYear: movie.year,
+            rating,
+          }
+        : {
+            movieId: movie.id,
+            movieTitle: title,
+            movieYear: movie.year,
+            rating,
+          };
+      
+      console.log('📤 Sending rating request:', { endpoint, body: requestBody });
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          isTvShow 
-            ? {
-                tvShowId: movie.id,
-                tvShowName: title,
-                tvShowYear: movie.year,
-                rating,
-              }
-            : {
-                movieId: movie.id,
-                movieTitle: title,
-                movieYear: movie.year,
-                rating,
-              }
-        ),
+        body: JSON.stringify(requestBody),
       });
 
-      if (response.ok) {
-        rateMovie(movieId, rating);
-        
-        // Check if this is an AI movie in the current view
-        const isAIMovie = aiMovies.find(m => m.id === movieId);
-        const aiMovieIndex = aiMovies.findIndex(m => m.id === movieId);
-        
-        // Check if this is a search result in the current view
-        const isSearchResult = searchResults.find(m => m.id === movieId);
-        const searchMovieIndex = searchResults.findIndex(m => m.id === movieId);
-        
-        // Remove from all lists
-        if (isMultipleResults) {
-          // Auto-slide for search results if the rated movie is in current view
-          if (isSearchResult && searchMovieIndex >= searchIndex && searchMovieIndex < searchIndex + 3) {
-            setSearchResults(prev => prev.filter(m => m.id !== movieId));
-            // After removing, check if we need to adjust the index
-            setTimeout(() => {
-              setSearchIndex(prev => {
-                const newLength = searchResults.length - 1; // Account for the removed movie
-                // If we're past the last valid index, go back
-                if (prev + 3 > newLength && prev > 0) {
-                  return Math.max(0, newLength - 3);
-                }
-                return prev;
-              });
-            }, 300); // Small delay for smooth transition
-          } else {
-            setSearchResults(prev => prev.filter(m => m.id !== movieId));
-          }
-        } else if (searchedMovie?.id === movieId) {
-          setSearchedMovie(null);
-          setSearchQuery("");
-        } else {
-          setAiMovies(prev => prev.filter(m => m.id !== movieId));
-          setAiTvShows(prev => prev.filter(m => m.id !== movieId)); // Added AI TV shows
-          setTrendingMovies(prev => prev.filter(m => m.id !== movieId));
-          setPopularMovies(prev => prev.filter(m => m.id !== movieId));
-          
-          // Auto-advance for AI movies if the rated movie is in current view
-          if (isAIMovie && aiMovieIndex >= aiIndex && aiMovieIndex < aiIndex + 3) {
-            // After removing, check if we need to adjust the index
-            setTimeout(() => {
-              setAiIndex(prev => {
-                const newLength = aiMovies.length - 1; // Account for the removed movie
-                // If we're past the last valid index, go back
-                if (prev + 3 > newLength && prev > 0) {
-                  return Math.max(0, newLength - 3);
-                }
-                return prev;
-              });
-            }, 300); // Small delay for smooth transition
-          }
-          
-          // Auto-advance for AI TV shows if the rated show is in current view
-          const aiTvShowIndex = aiTvShows.findIndex(m => m.id === movieId);
-          if (aiTvShowIndex >= aiTvIndex && aiTvShowIndex < aiTvIndex + 3) {
-            setTimeout(() => {
-              setAiTvIndex(prev => {
-                const newLength = aiTvShows.length - 1;
-                if (prev + 3 > newLength && prev > 0) {
-                  return Math.max(0, newLength - 3);
-                }
-                return prev;
-              });
-            }, 300);
-          }
+      if (!response.ok) {
+        let errorData = { message: 'Unknown error' };
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          console.error('Could not parse error response');
         }
-        setError(null);
-      } else {
-        // API request failed
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('❌ Failed to save rating - API error:', {
+        console.error('❌ Failed to save rating:', {
           status: response.status,
           statusText: response.statusText,
           error: errorData,
-          movieId,
-          isTvShow,
-          endpoint
         });
-        setError(`Failed to save rating: ${errorData.error || response.statusText}`);
+        return;
       }
+
+      const result = await response.json();
+      console.log('✅ Rating saved successfully:', result);
+
+      // Success - update UI
+      rateMovie(movieId, rating);
+      
+      // Check if this is an AI movie in the current view
+      const isAIMovie = aiMovies.find(m => m.id === movieId);
+      const aiMovieIndex = aiMovies.findIndex(m => m.id === movieId);
+      
+      // Check if this is a search result in the current view
+      const isSearchResult = searchResults.find(m => m.id === movieId);
+      const searchMovieIndex = searchResults.findIndex(m => m.id === movieId);
+      
+      // Remove from all lists
+      if (isMultipleResults) {
+        // Auto-slide for search results if the rated movie is in current view
+        if (isSearchResult && searchMovieIndex >= searchIndex && searchMovieIndex < searchIndex + 3) {
+          setSearchResults(prev => prev.filter(m => m.id !== movieId));
+          // After removing, check if we need to adjust the index
+          setTimeout(() => {
+            setSearchIndex(prev => {
+              const newLength = searchResults.length - 1; // Account for the removed movie
+              // If we're past the last valid index, go back
+              if (prev + 3 > newLength && prev > 0) {
+                return Math.max(0, newLength - 3);
+              }
+              return prev;
+            });
+          }, 300); // Small delay for smooth transition
+        } else {
+          setSearchResults(prev => prev.filter(m => m.id !== movieId));
+        }
+      } else if (searchedMovie?.id === movieId) {
+        setSearchedMovie(null);
+        setSearchQuery("");
+      } else {
+        setAiMovies(prev => prev.filter(m => m.id !== movieId));
+        setAiTvShows(prev => prev.filter(m => m.id !== movieId)); // Added AI TV shows
+        setTrendingMovies(prev => prev.filter(m => m.id !== movieId));
+        setPopularMovies(prev => prev.filter(m => m.id !== movieId));
+        
+        // Auto-advance for AI movies if the rated movie is in current view
+        if (isAIMovie && aiMovieIndex >= aiIndex && aiMovieIndex < aiIndex + 3) {
+          // After removing, check if we need to adjust the index
+          setTimeout(() => {
+            setAiIndex(prev => {
+              const newLength = aiMovies.length - 1; // Account for the removed movie
+              // If we're past the last valid index, go back
+              if (prev + 3 > newLength && prev > 0) {
+                return Math.max(0, newLength - 3);
+              }
+              return prev;
+            });
+          }, 300); // Small delay for smooth transition
+        }
+        
+        // Auto-advance for AI TV shows if the rated show is in current view
+        const aiTvShowIndex = aiTvShows.findIndex(m => m.id === movieId);
+        if (aiTvShowIndex >= aiTvIndex && aiTvShowIndex < aiTvIndex + 3) {
+          setTimeout(() => {
+            setAiTvIndex(prev => {
+              const newLength = aiTvShows.length - 1;
+              if (prev + 3 > newLength && prev > 0) {
+                return Math.max(0, newLength - 3);
+              }
+              return prev;
+            });
+          }, 300);
+        }
+      }
+      setError(null);
     } catch (error) {
       console.error('❌ Failed to save rating - Exception:', error);
       setError(`Failed to save rating: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -638,6 +652,86 @@ export default function HomePage() {
   const handleShare = (movie: Movie) => {
     setMovieToShare(movie);
     setShareModalOpen(true);
+  };
+
+  // Load user's AI feedback on mount (both movie and tvshow)
+  useEffect(() => {
+    const loadFeedback = async () => {
+      if (status !== "authenticated") return;
+      try {
+        // Load both movie and tvshow feedback
+        const [movieResponse, tvResponse] = await Promise.all([
+          fetch('/api/ai-feedback?type=movie'),
+          fetch('/api/ai-feedback?type=tvshow'),
+        ]);
+        
+        const allFeedback: Array<{ id: string; feedback: string; feedbackType: string }> = [];
+        
+        if (movieResponse.ok) {
+          const movieData = await movieResponse.json();
+          allFeedback.push(...(movieData.feedback || []));
+        }
+        
+        if (tvResponse.ok) {
+          const tvData = await tvResponse.json();
+          allFeedback.push(...(tvData.feedback || []));
+        }
+        
+        setUserFeedback(allFeedback);
+        console.log('📝 Loaded AI feedback:', allFeedback.length, 'items');
+      } catch (error) {
+        console.error('Failed to load AI feedback:', error);
+      }
+    };
+    loadFeedback();
+  }, [status]);
+
+  // Handle saving AI feedback
+  const handleSaveFeedback = async () => {
+    if (!feedbackText.trim()) return;
+    
+    setSavingFeedback(true);
+    try {
+      const response = await fetch('/api/ai-feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedback: feedbackText.trim(),
+          feedbackType,
+        }),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setUserFeedback(prev => [data.feedback, ...prev].slice(0, 5));
+        setFeedbackText("");
+        setShowFeedbackModal(false);
+        console.log('✅ Feedback saved:', data.feedback);
+      } else {
+        const error = await response.json();
+        console.error('Failed to save feedback:', error);
+      }
+    } catch (error) {
+      console.error('Error saving feedback:', error);
+    } finally {
+      setSavingFeedback(false);
+    }
+  };
+
+  // Handle deleting AI feedback
+  const handleDeleteFeedback = async (feedbackId: string) => {
+    try {
+      const response = await fetch(`/api/ai-feedback?id=${feedbackId}`, {
+        method: 'DELETE',
+      });
+      
+      if (response.ok) {
+        setUserFeedback(prev => prev.filter(f => f.id !== feedbackId));
+        console.log('✅ Feedback deleted');
+      }
+    } catch (error) {
+      console.error('Error deleting feedback:', error);
+    }
   };
 
   // Handle watchlist with auto-slide for search results and AI picks
@@ -935,6 +1029,130 @@ export default function HomePage() {
         />
       )}
 
+      {/* AI Feedback Modal */}
+      <AnimatePresence>
+        {showFeedbackModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={() => setShowFeedbackModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-gray-900 border border-white/20 rounded-2xl p-6 max-w-lg w-full shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <Send className="w-5 h-5 text-amber-400" />
+                  AI Recommendation Feedback
+                </h2>
+                <button
+                  onClick={() => setShowFeedbackModal(false)}
+                  className="text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <p className="text-gray-400 text-sm mb-4">
+                Tell us what you'd like to see more or less of in your AI recommendations. Your feedback will be used to improve future suggestions.
+              </p>
+              
+              {/* Feedback Type Toggle */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setFeedbackType('movie')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    feedbackType === 'movie'
+                      ? 'bg-cyan-500 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  <Film className="w-4 h-4 inline mr-2" />
+                  Movies
+                </button>
+                <button
+                  onClick={() => setFeedbackType('tvshow')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                    feedbackType === 'tvshow'
+                      ? 'bg-purple-500 text-white'
+                      : 'bg-gray-800 text-gray-400 hover:bg-gray-700'
+                  }`}
+                >
+                  <Tv className="w-4 h-4 inline mr-2" />
+                  TV Shows
+                </button>
+              </div>
+              
+              {/* Feedback Input */}
+              <textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder="E.g., 'I want more thriller movies', 'Less romance films', 'More Korean dramas', 'Focus on recent releases from 2023-2024'..."
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white placeholder-gray-500 resize-none h-32 focus:outline-none focus:border-cyan-400 transition-colors"
+              />
+              
+              {/* Quick Suggestions */}
+              <div className="flex flex-wrap gap-2 mt-3 mb-4">
+                {['More thrillers', 'Less romance', 'Recent releases only', 'More foreign films', 'Hidden gems'].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => setFeedbackText(prev => prev ? `${prev}, ${suggestion.toLowerCase()}` : suggestion)}
+                    className="px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs rounded-full transition-colors"
+                  >
+                    + {suggestion}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Existing Feedback */}
+              {userFeedback.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-medium text-gray-400 mb-2">Your Active Feedback:</h3>
+                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                    {userFeedback.map((f) => (
+                      <div key={f.id} className="flex items-center justify-between bg-gray-800/50 rounded-lg px-3 py-2">
+                        <span className="text-gray-300 text-sm truncate flex-1">{f.feedback}</span>
+                        <button
+                          onClick={() => handleDeleteFeedback(f.id)}
+                          className="text-gray-500 hover:text-red-400 ml-2 flex-shrink-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Submit Button */}
+              <Button
+                onClick={handleSaveFeedback}
+                disabled={!feedbackText.trim() || savingFeedback}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-semibold py-3 rounded-xl"
+              >
+                {savingFeedback ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4 mr-2" />
+                    Save Feedback
+                  </>
+                )}
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-start justify-between gap-4">
@@ -986,6 +1204,21 @@ export default function HomePage() {
                     <Tv className="w-4 h-4" />
                     <span className="font-bold">AI Picks - TV Shows</span>
                   </div>
+                )}
+              </Button>
+              
+              {/* AI Feedback Button */}
+              <Button
+                onClick={() => setShowFeedbackModal(true)}
+                variant="outline"
+                className="border-amber-400/50 text-amber-300 hover:bg-amber-500/20 font-medium px-4 py-2 text-sm rounded-lg"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Give AI Feedback
+                {userFeedback.length > 0 && (
+                  <span className="ml-2 bg-amber-500 text-black text-xs px-2 py-0.5 rounded-full">
+                    {userFeedback.length}
+                  </span>
                 )}
               </Button>
             </div>
@@ -1055,7 +1288,7 @@ export default function HomePage() {
         >
           <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border-purple-400/30">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Sparkles className="w-6 h-6 text-purple-400" />
                   <div>
@@ -1065,15 +1298,55 @@ export default function HomePage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  onClick={loadAIRecommendations}
-                  disabled={aiLoading}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      setFeedbackType('movie');
+                      setShowFeedbackModal(true);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="border-amber-400/50 text-amber-300 hover:bg-amber-500/20"
+                  >
+                    <Send className="w-3 h-3 mr-1" />
+                    Feedback
+                  </Button>
+                  <Button
+                    onClick={loadAIRecommendations}
+                    disabled={aiLoading}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg"
+                  >
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
               </div>
+              
+              {/* Active Feedback Display */}
+              {userFeedback.filter(f => f.feedbackType === 'movie').length > 0 && (
+                <div className="mb-4 p-3 bg-amber-500/10 border border-amber-400/30 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Send className="w-4 h-4 text-amber-400" />
+                    <span className="text-amber-300 text-sm font-medium">Your Active Feedback:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {userFeedback.filter(f => f.feedbackType === 'movie').map((f) => (
+                      <span
+                        key={f.id}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/20 text-amber-200 text-xs rounded-full"
+                      >
+                        "{f.feedback.length > 40 ? f.feedback.substring(0, 40) + '...' : f.feedback}"
+                        <button
+                          onClick={() => handleDeleteFeedback(f.id)}
+                          className="ml-1 text-amber-400/60 hover:text-red-400 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="relative px-12">
                 {/* Left Arrow */}
@@ -1141,7 +1414,7 @@ export default function HomePage() {
         >
           <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border-purple-400/30">
             <CardContent className="pt-6">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <Tv className="w-6 h-6 text-purple-400" />
                   <div>
@@ -1151,15 +1424,55 @@ export default function HomePage() {
                     </p>
                   </div>
                 </div>
-                <Button
-                  onClick={loadAITvRecommendations}
-                  disabled={aiTvLoading}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg"
-                >
-                  <Tv className="w-4 h-4 mr-2" />
-                  Refresh
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => {
+                      setFeedbackType('tvshow');
+                      setShowFeedbackModal(true);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="border-amber-400/50 text-amber-300 hover:bg-amber-500/20"
+                  >
+                    <Send className="w-3 h-3 mr-1" />
+                    Feedback
+                  </Button>
+                  <Button
+                    onClick={loadAITvRecommendations}
+                    disabled={aiTvLoading}
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg"
+                  >
+                    <Tv className="w-4 h-4 mr-2" />
+                    Refresh
+                  </Button>
+                </div>
               </div>
+              
+              {/* Active Feedback Display for TV Shows */}
+              {userFeedback.filter(f => f.feedbackType === 'tvshow').length > 0 && (
+                <div className="mb-4 p-3 bg-amber-500/10 border border-amber-400/30 rounded-xl">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Send className="w-4 h-4 text-amber-400" />
+                    <span className="text-amber-300 text-sm font-medium">Your Active TV Show Feedback:</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {userFeedback.filter(f => f.feedbackType === 'tvshow').map((f) => (
+                      <span
+                        key={f.id}
+                        className="inline-flex items-center gap-1 px-3 py-1 bg-amber-500/20 text-amber-200 text-xs rounded-full"
+                      >
+                        "{f.feedback.length > 40 ? f.feedback.substring(0, 40) + '...' : f.feedback}"
+                        <button
+                          onClick={() => handleDeleteFeedback(f.id)}
+                          className="ml-1 text-amber-400/60 hover:text-red-400 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="relative px-12">
                 {/* Left Arrow */}

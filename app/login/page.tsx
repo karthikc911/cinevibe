@@ -58,7 +58,7 @@ export default function LoginPage() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-5xl font-black text-white tracking-tight"
           >
-            🎬 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">CineMate</span>
+            🎬 <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">CineVibe</span>
           </motion.h1>
           <p className="text-gray-400 text-lg">
             Your AI-Powered Movie Companion

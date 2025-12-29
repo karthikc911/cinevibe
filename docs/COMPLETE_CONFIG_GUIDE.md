@@ -1,8 +1,8 @@
-# 🔧 Complete Configuration Guide for CineMate
+# 🔧 Complete Configuration Guide for CineVibe
 
 ## Overview
 
-This guide provides **ALL** configuration values, API keys, credentials, and mock data needed to run CineMate end-to-end from authentication → rating → vector search → AI recommendations → UI.
+This guide provides **ALL** configuration values, API keys, credentials, and mock data needed to run CineVibe end-to-end from authentication → rating → vector search → AI recommendations → UI.
 
 ---
 
@@ -104,7 +104,7 @@ GOOGLE_CLIENT_SECRET="[YOUR-CLIENT-SECRET]"
 3. **Enable APIs**: Search for "Google+ API" and enable it
 4. **Go to**: Credentials → Create Credentials → OAuth 2.0 Client ID
 5. **Application Type**: Web application
-6. **Name**: CineMate Local Development
+6. **Name**: CineVibe Local Development
 7. **Authorized redirect URIs**:
    ```
    http://localhost:3000/api/auth/callback/google
@@ -131,7 +131,7 @@ OPENAI_API_KEY="sk-[YOUR-KEY-HERE]"
 2. **Sign in** / Create account
 3. **Add Payment Method**: Settings → Billing ($5-10 recommended to start)
 4. **Go to**: API Keys → Create new secret key
-5. **Name it**: "CineMate Development"
+5. **Name it**: "CineVibe Development"
 6. **Copy**: The key (starts with `sk-`)
 7. **⚠️ Important**: Save it immediately (can't view again)
 
@@ -162,7 +162,7 @@ Copy this entire template and fill in your values:
 
 ```bash
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# CineMate Backend Configuration
+# CineVibe Backend Configuration
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -564,5 +564,5 @@ Once all items are checked, you have a fully functional:
 - ✅ **Chat Interface** with personalized context
 - ✅ **Beautiful UI** with dark cinematic theme
 
-Enjoy building with CineMate! 🎬✨
+Enjoy building with CineVibe! 🎬✨
 

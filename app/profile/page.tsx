@@ -27,6 +27,8 @@ export default function ProfilePage() {
   const [localLanguages, setLocalLanguages] = useState<string[]>(languages);
   const [localGenres, setLocalGenres] = useState<string[]>([]);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [dbRatingsCount, setDbRatingsCount] = useState<number | null>(null);
+  const [dbRatedMovies, setDbRatedMovies] = useState<any[]>([]);
 
   // AI Recommendation Filter Preferences
   const currentYear = new Date().getFullYear();
@@ -71,6 +73,34 @@ export default function ProfilePage() {
     "Romance", "Sci-Fi", "Fantasy", "Mystery", "Animation",
     "Documentary", "Crime", "Adventure", "Biography", "War"
   ];
+
+  // Load ratings from database
+  useEffect(() => {
+    const loadRatingsFromDB = async () => {
+      if (!session?.user?.email) {
+        console.log('⚠️ No session, skipping ratings load');
+        return;
+      }
+
+      try {
+        console.log('🔄 Loading ratings from database...');
+        const response = await fetch('/api/ratings');
+        if (response.ok) {
+          const data = await response.json();
+          const ratings = data.ratings || [];
+          setDbRatingsCount(ratings.length);
+          setDbRatedMovies(ratings);
+          console.log('✅ Loaded ratings from database:', ratings.length);
+        } else {
+          console.error('❌ Failed to load ratings:', response.status);
+        }
+      } catch (error) {
+        console.error('❌ Error loading ratings:', error);
+      }
+    };
+
+    loadRatingsFromDB();
+  }, [session?.user?.email]);
 
   // Load user preferences on mount
   useEffect(() => {
@@ -234,13 +264,27 @@ export default function ProfilePage() {
     }
   };
 
-  const strength = getProfileStrength();
+  // Use database ratings count if available, otherwise fall back to localStorage
+  const actualRatedCount = dbRatingsCount !== null ? dbRatingsCount : rated;
+  
+  // Calculate profile strength based on actual database count
+  const strength = actualRatedCount >= 100 ? "Strong" : "Weak";
+  
+  // Get top genres from Zustand store (for now)
   const topGenres = getTopGenres();
 
-  // Get recently rated movies (last 8)
+  // Get recently rated movies from Zustand store (for now)
+  // TODO: Could fetch from database for more accurate results
   const recentlyRated = [...ratedMovies]
     .sort((a, b) => b.timestamp - a.timestamp)
     .slice(0, 8);
+
+  console.log('📊 Profile Stats:', {
+    dbRatingsCount,
+    localStorageCount: rated,
+    usingCount: actualRatedCount,
+    strength,
+  });
 
   return (
     <div className="space-y-6">
@@ -289,7 +333,7 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">
                   <span className="text-gray-300">Movies Rated</span>
                   <Badge className="bg-cyan-500 text-black font-semibold">
-                    {rated}
+                    {dbRatingsCount !== null ? dbRatingsCount : <Loader2 className="w-4 h-4 animate-spin" />}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg bg-white/5">

@@ -13,6 +13,7 @@
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:ping": "node scripts/keep-supabase-alive.js",
+    "db:fix-movie": "npx ts-node scripts/fix-movie-metadata.ts",
     "populate:movies": "node scripts/populate-movies.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch",

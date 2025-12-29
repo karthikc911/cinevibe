@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import OpenAI from 'openai';
 import { logger } from '@/lib/logger';
+import { formatPosterUrl } from '@/lib/poster-utils';
 
 // Initialize Perplexity API client
 const perplexity = new OpenAI({
@@ -248,7 +249,7 @@ FILTER REQUIREMENTS:`;
     const transformedMovies = movies.map(movie => ({
       id: movie.id,
       title: movie.title,
-      poster: movie.posterPath ? `https://image.tmdb.org/t/p/w500${movie.posterPath}` : '/placeholder-movie.jpg',
+      poster: formatPosterUrl(movie.posterPath) || '/placeholder-movie.jpg',
       imdb: movie.imdbRating || movie.voteAverage,
       rt: movie.rtRating,
       summary: movie.overview,

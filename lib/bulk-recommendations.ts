@@ -216,7 +216,7 @@ export async function generate50Recommendations(userId: string) {
       messages: [
         {
           role: "system",
-          content: `You are CineMate's expert movie recommender. Analyze the user's ratings and recommend 50 diverse movies they would love.
+          content: `You are CineVibe's expert movie recommender. Analyze the user's ratings and recommend 50 diverse movies they would love.
 
 Instructions:
 - Consider their amazing, good, and awful ratings

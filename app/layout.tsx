@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CineMate - Your Movie Taste, Powered by Vibes",
+  title: "CineVibe - Your Movie Taste, Powered by Vibes",
   description: "Personalized movie recommender with dark cinematic UI",
 };
 

@@ -4,6 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { autoFixMovieData } from '@/lib/tmdb-helper';
+import { formatPosterUrl } from '@/lib/poster-utils';
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
@@ -82,21 +83,6 @@ export async function POST(request: NextRequest) {
       count: quickMovies.length,
       movies: quickMovies.map(m => ({ id: m.id, title: m.title, rating: m.voteAverage })),
     });
-
-    // Helper function to format poster URL
-    const formatPosterUrl = (posterPath: string | null): string => {
-      if (!posterPath) return '';
-      // If already a full URL, return as is
-      if (posterPath.startsWith('http://') || posterPath.startsWith('https://')) {
-        return posterPath;
-      }
-      // If it's a TMDB path (starts with /), convert to full TMDB URL
-      if (posterPath.startsWith('/')) {
-        return `https://image.tmdb.org/t/p/w500${posterPath}`;
-      }
-      // Otherwise, assume it's a custom path, return as is
-      return posterPath;
-    };
 
     // Calculate match percentage
     const calculateMatchPercentage = (movie: any) => {

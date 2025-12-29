@@ -1,351 +1,323 @@
-# 🎬 CineMate - Personalized Movie Recommender
+# 🎬 CineVibe
 
-A beautiful, dark cinematic UI movie recommendation system with AI-powered suggestions. Built with Next.js, TypeScript, Tailwind CSS, and advanced AI integration.
+**Your AI-Powered Movie & TV Show Companion**
 
-## ⚡ Start the Server
+CineVibe is a personalized movie recommendation platform that uses AI to help you discover films and TV shows you'll love. Rate what you've watched, and get intelligent suggestions tailored to your taste.
 
-```bash
-npm run dev
-```
-
-**Access the app at:** http://localhost:3000
-
-> **Note:** First-time users will be redirected to `/discover` where you'll see **Login** and **Sign Up** buttons.
+![CineVibe](https://img.shields.io/badge/Next.js-14-black) ![React Native](https://img.shields.io/badge/Expo-React%20Native-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-green) ![AI](https://img.shields.io/badge/AI-Perplexity-purple)
 
 ---
 
-## ✨ Features
+## 🌟 Features
 
-- **🌙 Dark Cinematic UI**: Gradient backgrounds with neon cyan glow accents
-- **🎯 Smart AI Recommendations**: Get personalized movie picks powered by OpenAI & Perplexity
-- **⭐ Rating System**: Four-tier rating system (Awful, Meh, Good, Amazing) with keyboard shortcuts
-- **📝 Watchlist Management**: Track movies you want to watch and mark them as watched
-- **🔍 Advanced Search**: AI-powered search with natural language queries
-- **👥 Friends Feature**: Connect with friends and share movie recommendations
-- **📊 Profile Analytics**: View your rating statistics and top genres
-- **♿ Accessible**: Semantic HTML, keyboard navigation, and ARIA labels
-- **📱 Responsive**: Works beautifully on all screen sizes
+| Feature | Description |
+|---------|-------------|
+| **AI Recommendations** | Perplexity AI generates personalized movie picks based on your ratings and preferences |
+| **Smart Rating System** | Rate movies as Amazing, Good, Meh, Awful, or Not Interested |
+| **Watchlist** | Save movies and TV shows to watch later |
+| **Multi-Language Support** | Movies in Hindi, English, Tamil, Telugu, Kannada, Malayalam, Korean, Japanese, and more |
+| **Friends & Sharing** | Share recommendations with friends |
+| **Cross-Platform** | Website + iOS app with synchronized data |
+| **IMDB Integration** | View ratings, vote counts, and user review summaries |
 
-## 🚀 Quick Start
+---
+
+## 📱 Platforms
+
+### Website (Next.js)
+- Full-featured web application
+- Google OAuth login
+- Responsive design for desktop and mobile browsers
+
+### iOS App (Expo/React Native)
+- Native mobile experience
+- Email/password and Google authentication
+- Offline-capable with demo mode
+
+**Both platforms share the same backend API and database, ensuring your ratings, watchlist, and preferences stay synchronized.**
+
+---
+
+## 🏗️ Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         CineVibe                                 │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────────┐                      ┌──────────────┐       │
+│   │   Website    │                      │   iOS App    │       │
+│   │  (Next.js)   │                      │ (Expo/RN)    │       │
+│   └──────┬───────┘                      └──────┬───────┘       │
+│          │                                     │                │
+│          └──────────────┬──────────────────────┘                │
+│                         │                                       │
+│                         ▼                                       │
+│          ┌──────────────────────────────┐                      │
+│          │   Next.js API Routes         │                      │
+│          │   (Shared Backend)           │                      │
+│          └──────────────┬───────────────┘                      │
+│                         │                                       │
+│          ┌──────────────┼───────────────┐                      │
+│          ▼              ▼               ▼                      │
+│   ┌──────────┐   ┌──────────┐   ┌───────────┐                 │
+│   │PostgreSQL│   │  TMDB    │   │Perplexity │                 │
+│   │ Database │   │   API    │   │    AI     │                 │
+│   └──────────┘   └──────────┘   └───────────┘                 │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| **Website Frontend** | Next.js 14, React, Tailwind CSS, Framer Motion |
+| **iOS App** | Expo, React Native, Expo Router |
+| **Backend API** | Next.js API Routes |
+| **Database** | PostgreSQL (via Prisma ORM) |
+| **Authentication** | NextAuth.js (web), Custom tokens (mobile) |
+| **AI/ML** | Perplexity AI for recommendations |
+| **Movie Data** | TMDB API |
+| **Hosting** | Vercel (website), App Store (iOS) |
+
+---
+
+## 📂 Project Structure
+
+```
+cinemate/
+├── app/                      # Next.js App Router (Website)
+│   ├── api/                  # Backend API endpoints
+│   ├── page.tsx              # Home page
+│   ├── rate/                 # Rate movies page
+│   ├── watchlist/            # Watchlist page
+│   └── profile/              # User profile & preferences
+│
+├── cinemate-ios/             # iOS App (Expo)
+│   ├── app/                  # Expo Router screens
+│   ├── components/           # React Native components
+│   └── lib/                  # Utilities & API client
+│
+├── components/               # Website React components
+├── lib/                      # Website utilities
+├── prisma/                   # Database schema
+├── config/                   # AI prompts configuration
+└── docs/                     # Documentation
+```
+
+---
+
+## 🚀 Quick Start (Local Development)
 
 ### Prerequisites
 
-- Node.js 18+ or npm/pnpm/yarn
-- PostgreSQL database (local or Supabase)
-- OpenAI API key
-- Google OAuth credentials (optional)
+- Node.js 18+ 
+- PostgreSQL database (or use Neon/Supabase free tier)
+- API Keys: TMDB, Perplexity, Google OAuth
 
-### Installation
+### 1. Clone & Install
 
 ```bash
-# Install dependencies
+git clone https://github.com/YOUR_USERNAME/cinemate.git
+cd cinemate
 npm install
-
-# Set up environment variables (see below)
-cp .env.example .env
-
-# Generate Prisma client
-npx prisma generate
-
-# Run database migrations
-npx prisma migrate dev
-
-# Start development server
-npm run dev
 ```
 
-Visit http://localhost:3000
+### 2. Environment Setup
 
-### Keep Supabase Active
-
-Supabase pauses databases after 7 days of inactivity. Prevent this by running:
-
-```bash
-# Quick ping command
-npm run db:ping
-
-# Or manually
-npx prisma db execute --stdin <<< "SELECT 1;"
-
-# Or open database GUI (also keeps it active)
-npm run db:studio
-```
-
-**Pro tip:** Enable the GitHub Actions workflow (`.github/workflows/keep-supabase-alive.yml`) to automatically ping your database every 3 days.
-
-## 🔐 Environment Variables
-
-Create a `.env` or `.env.local` file in the root directory:
+Create `.env` file:
 
 ```env
-# Database (PostgreSQL)
-DATABASE_URL="postgresql://user:password@localhost:5432/cinemate?schema=public"
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/cinemate"
 
-# NextAuth
+# Authentication
+NEXTAUTH_SECRET="your-random-secret-key"
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="generate-with-openssl-rand-base64-32"
 
-# Google OAuth (Get from Google Cloud Console)
+# Google OAuth
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
-# OpenAI API (Get from OpenAI Platform)
-OPENAI_API_KEY="sk-your-openai-api-key"
-OPENAI_MODEL="gpt-4o-mini"  # or "gpt-4-turbo-preview"
-
-# Perplexity API (Optional - for enhanced search)
-PERPLEXITY_API_KEY="pplx-your-perplexity-api-key"
-
-# TMDB API (Optional - for movie metadata)
+# APIs
 TMDB_API_KEY="your-tmdb-api-key"
+PERPLEXITY_API_KEY="your-perplexity-api-key"
 ```
 
-See [Complete Config Guide](docs/COMPLETE_CONFIG_GUIDE.md) for detailed setup instructions.
-
-## 🗺️ Routes & Pages
-
-| Route | Description |
-|-------|-------------|
-| `/` | Home page with discovery, trending, and AI recommendations |
-| `/discover` | Movie discovery with search and filters |
-| `/onboarding` | Set up your profile and preferences |
-| `/rate` | Rate movies with progress tracker |
-| `/search` | Advanced search with AI-powered queries |
-| `/watchlist` | Manage your watchlist |
-| `/friends` | Connect with friends and share recommendations |
-| `/profile` | View stats and preferences |
-
-## 🎨 Tech Stack
-
-### Frontend
-- **Next.js 16** - App Router with Server Components
-- **React 19** - Latest React with new features
-- **TypeScript** - Full type safety
-- **Tailwind CSS v4** - Modern styling with CSS-first config
-- **shadcn/ui** - Beautiful, accessible components
-- **Framer Motion** - Smooth animations
-- **Zustand** - Client-side state management
-
-### Backend & AI
-- **NextAuth.js** - Authentication (OAuth + Credentials)
-- **Prisma** - Type-safe database ORM
-- **PostgreSQL** - Relational database with pgvector
-- **Supabase** - Cloud PostgreSQL hosting
-- **OpenAI GPT** - AI recommendations and analysis
-- **Perplexity Sonar API** - Real-time movie data search
-- **RAG Architecture** - Vector embeddings for personalized suggestions
-
-## 💾 Database Schema
-
-The app uses PostgreSQL with pgvector extension for similarity search:
-
-- **Users**: Authentication and preferences
-- **Movies/TvShows**: Metadata from TMDB
-- **Ratings**: User ratings (awful, meh, good, amazing)
-- **Watchlist**: Movies to watch
-- **Recommendations**: AI-generated suggestions
-- **Friendships**: Social connections
-- **UserPreferences**: Vector embeddings for RAG
-
-See [Architecture Documentation](docs/ARCHITECTURE.md) for details.
-
-## 🛠️ Development Commands
+### 3. Database Setup
 
 ```bash
-# Development
-npm run dev              # Start dev server
-npm run build            # Build for production
-npm run start            # Start production server
-npm run lint             # Run linter
-
-# Database
-npm run db:generate      # Generate Prisma client
-npm run db:migrate       # Run migrations
-npm run db:push          # Push schema changes
-npm run db:studio        # Open Prisma Studio GUI
-npm run db:ping          # Keep Supabase active
-
-# Testing
-npm test                 # Run all tests
-npm run test:watch       # Watch mode
-npm run test:unit        # Unit tests only
-npm run test:integration # Integration tests only
-npm run test:api         # API tests only
-
-# Setup
-npm run setup            # Interactive setup wizard
-npm run populate:movies  # Populate movie database
-```
-
-## 🤖 AI Recommendation System
-
-CineMate uses a hybrid AI approach:
-
-```
-User Ratings + Preferences
-        ↓
-RAG Vector Search (PostgreSQL + pgvector)
-        ↓
-Perplexity Sonar (Real-time movie data)
-        ↓
-OpenAI GPT (Taste analysis + Match scoring)
-        ↓
-Personalized Recommendations
-```
-
-**Features:**
-- Vector embeddings for preference matching
-- Real-time web search for current movies
-- AI-generated match percentages
-- Context-aware recommendations
-- Continuous learning from ratings
-
-See [RAG Architecture](docs/RAG_ARCHITECTURE.md) for technical details.
-
-## 📱 Mobile Access with ngrok
-
-Test on mobile devices:
-
-```bash
-# Install ngrok
-brew install ngrok
-
-# Start tunnel
-ngrok http 3000
-
-# Use the https URL on your mobile device
-```
-
-See [Mobile Access Guide](docs/MOBILE_ACCESS_GUIDE.md) for setup.
-
-## 🧪 Testing
-
-The app includes comprehensive test coverage:
-
-```bash
-# Run all tests with coverage
-npm test
-
-# Run specific test suites
-npm run test:unit        # Unit tests
-npm run test:integration # Integration tests
-npm run test:api         # API endpoint tests
-
-# Watch mode for development
-npm run test:watch
-```
-
-See [Testing Guide](docs/TESTING.md) for more information.
-
-## 📚 Documentation
-
-Detailed documentation is available in the `/docs` folder:
-
-### Getting Started
-- [Complete Configuration Guide](docs/COMPLETE_CONFIG_GUIDE.md)
-- [Database Setup Guide](docs/DATABASE_SETUP_GUIDE.md)
-- [Backend Setup](docs/BACKEND_SETUP.md)
-
-### Architecture
-- [Architecture Overview](docs/ARCHITECTURE.md)
-- [RAG Architecture](docs/RAG_ARCHITECTURE.md)
-- [Testing Guide](docs/TESTING.md)
-
-### Features
-- [Friends System](docs/FRIENDS_SYSTEM.md)
-- [Match Reasoning](docs/MATCH_REASONING_DOCUMENTATION.md)
-- [AI Features](docs/AI_THINKING_PANEL_UPDATES.md)
-
-### Operational Guides
-- [Logging Guide](docs/LOGGING_GUIDE.md)
-- [Mobile Access Guide](docs/MOBILE_ACCESS_GUIDE.md)
-- [ngrok Quick Reference](docs/NGROK_QUICK_REFERENCE.md)
-
-## 🎯 Key Features Explained
-
-### AI-Powered Search
-Ask natural language questions:
-- "Top 5 trending movies in India"
-- "Best sci-fi movies from 2023"
-- "Oscar-winning dramas"
-
-### Smart Recommendations
-The AI learns from your ratings to suggest movies you'll love:
-- Analyzes your taste profile
-- Considers genre preferences
-- Filters by year, rating, and other criteria
-- Provides match percentage for each recommendation
-
-### Friends System
-- Connect with friends
-- Share movie recommendations
-- See friend's ratings and reviews
-- Match percentage between friends
-
-### Rating System
-Rate movies with emojis:
-- 😖 Awful
-- 😐 Meh  
-- 😊 Good
-- 🤩 Amazing
-- ❌ Not Interested
-
-## 🚨 Troubleshooting
-
-### Database Connection Issues
-```bash
-# Test connection
-npx prisma db pull
-
-# Reset database
-npx prisma migrate reset
-
-# Regenerate client
+# Generate Prisma client
 npx prisma generate
+
+# Run migrations
+npx prisma migrate dev
+
+# (Optional) Seed with sample data
+npx prisma db seed
 ```
 
-### Supabase Paused
-```bash
-# Wake up database
-npm run db:ping
+### 4. Run Website
 
-# Check status in Supabase dashboard
+```bash
+npm run dev
+# Open http://localhost:3000
 ```
 
-### OpenAI API Errors
-- Verify API key is correct
-- Check billing status
-- Ensure rate limits aren't exceeded
+### 5. Run iOS App (Optional)
 
-### Build Errors
 ```bash
-# Clear cache
-rm -rf .next node_modules
+cd cinemate-ios
 npm install
-npm run build
+npx expo start
+# Scan QR code with Expo Go app
 ```
-
-## 🔗 Useful Links
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [OpenAI API](https://platform.openai.com/docs)
-- [Tailwind CSS](https://tailwindcss.com/docs)
-
-## 📄 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgments
-
-- Movie data from [TMDB](https://www.themoviedb.org/)
-- Icons from [Lucide](https://lucide.dev/)
-- UI components from [shadcn/ui](https://ui.shadcn.com/)
-- Built with [Next.js](https://nextjs.org/)
 
 ---
 
-**Made with ❤️ and powered by vibes** ✨
+## 🌐 Deployment
 
-For questions or feedback, open an issue or reach out!
+### Website → Vercel
+
+| Step | Action |
+|------|--------|
+| 1 | Push code to GitHub |
+| 2 | Import repo at [vercel.com/new](https://vercel.com/new) |
+| 3 | Add environment variables |
+| 4 | Deploy (automatic on git push) |
+
+**Detailed guide:** [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
+
+### iOS App → App Store
+
+| Route | Timeline | Best For |
+|-------|----------|----------|
+| **TestFlight** | 2-4 days | Beta testing, early access |
+| **App Store** | 1-2 weeks | Public release |
+
+**Requirements:**
+- Apple Developer Account ($99/year)
+- Expo/EAS account (free)
+
+**Steps:**
+```bash
+cd cinemate-ios
+npm install -g eas-cli
+eas login
+eas build --platform ios
+eas submit --platform ios
+```
+
+**Detailed guide:** [docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)
+
+---
+
+## 🔑 Getting API Keys
+
+### TMDB (Movie Data)
+1. Sign up at [themoviedb.org](https://www.themoviedb.org/)
+2. Go to Settings → API → Create API Key
+3. Copy the API Key (v3 auth)
+
+### Perplexity AI (Recommendations)
+1. Sign up at [perplexity.ai](https://www.perplexity.ai/)
+2. Go to API settings
+3. Generate API key
+
+### Google OAuth
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create project → APIs & Services → Credentials
+3. Create OAuth 2.0 Client ID
+4. Add redirect URI: `http://localhost:3000/api/auth/callback/google`
+
+---
+
+## 📖 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md) | Complete Vercel + App Store deployment |
+| [SYSTEM_DESIGN.md](docs/SYSTEM_DESIGN.md) | Architecture & data flow diagrams |
+| [IOS_APP_STRATEGY.md](docs/IOS_APP_STRATEGY.md) | iOS app development strategy |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Technical architecture details |
+| [BACKEND_SETUP.md](docs/BACKEND_SETUP.md) | Backend configuration guide |
+
+---
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific test file
+npm test -- __tests__/api/ratings.test.ts
+```
+
+---
+
+## 📊 Database Schema (Key Models)
+
+```sql
+User
+├── id, email, name, password
+├── languages[], genres[]          -- Preferences
+├── aiInstructions                 -- Custom AI guidance
+└── mobileToken                    -- iOS app auth
+
+Movie
+├── id (TMDB ID), title, year
+├── posterPath, overview
+├── imdbRating, userReviewSummary
+└── budget, boxOffice
+
+MovieRating
+├── userId, movieId
+├── rating (amazing/good/meh/awful/not-interested)
+└── createdAt
+
+WatchlistItem
+├── userId, movieId
+└── addedAt
+```
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📝 License
+
+This project is for personal/educational use. See [LICENSE](LICENSE) for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [TMDB](https://www.themoviedb.org/) for movie data
+- [Perplexity AI](https://www.perplexity.ai/) for AI recommendations
+- [Vercel](https://vercel.com/) for hosting
+- [Expo](https://expo.dev/) for React Native tooling
+
+---
+
+## 📬 Support
+
+For issues or questions:
+- Open a GitHub issue
+- Check [docs/](docs/) for detailed guides
+
+---
+
+**Built with ❤️ using Next.js, React Native, and AI**

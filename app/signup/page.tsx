@@ -112,7 +112,7 @@ export default function SignupPage() {
         <Card className="bg-white/5 backdrop-blur-sm border-white/10">
           <CardHeader className="text-center space-y-2">
             <CardTitle className="text-3xl font-bold text-white">
-              Join <span className="bg-gradient-to-r from-cyan-400 to-blue-500 text-transparent bg-clip-text">CineMate</span>
+              Join <span className="bg-gradient-to-r from-cyan-400 to-blue-500 text-transparent bg-clip-text">CineVibe</span>
             </CardTitle>
             <p className="text-gray-400">Create your account to get started</p>
           </CardHeader>

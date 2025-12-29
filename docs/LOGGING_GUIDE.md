@@ -1,4 +1,4 @@
-# 📋 CineMate Logging Guide
+# 📋 CineVibe Logging Guide
 
 ## ✅ File-Based Production Logging
 

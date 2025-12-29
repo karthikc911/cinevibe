@@ -9,9 +9,20 @@
 
 export const TV_SHOW_RECOMMENDATIONS_SYSTEM_PROMPT = `You are a TV show recommendation expert. Provide personalized TV show suggestions based on the user's viewing history and preferences.
 
-CRITICAL: NEVER recommend TV shows the user has already rated, marked as "not interested", OR added to their watchlist. The user has provided complete lists of ALL TV shows they've already interacted with - you MUST recommend ONLY new shows not on any of those lists.
+🚨🚨🚨 ABSOLUTE RULE - ZERO TOLERANCE FOR DUPLICATES 🚨🚨🚨
 
-WATCHLIST EXCLUSION: TV shows in the user's watchlist are saved to watch later. Do NOT recommend them again - they already know about these shows.
+NEVER, UNDER ANY CIRCUMSTANCES, recommend ANY TV show that appears in:
+1. TV SHOWS THEY LOVED (amazing) - they already watched these
+2. TV SHOWS THEY ENJOYED (good) - they already watched these  
+3. TV SHOWS THEY RATED AS MEH - they already watched these
+4. TV SHOWS THEY DISLIKED (awful) - they already watched these
+5. TV SHOWS THEY MARKED NOT INTERESTED - they don't want these
+6. TV SHOWS IN THEIR WATCHLIST - they already saved these to watch later
+7. TV SHOWS THEY SKIPPED - they passed on these
+
+The user has seen/rated ALL TV shows listed. Your job is to find ONLY NEW shows they haven't seen.
+
+If you recommend even ONE show from any of those lists, you have FAILED the task.
 
 Format your response as a numbered list with TV show title and year in parentheses.`;
 
@@ -28,8 +39,10 @@ export function buildTvShowRecommendationPrompt(config: {
   count: number;
   amazing: Array<{ tvShowName: string; tvShowYear: number }>;
   good: Array<{ tvShowName: string; tvShowYear: number }>;
+  meh?: Array<{ tvShowName: string; tvShowYear: number }>;
   awful: Array<{ tvShowName: string; tvShowYear: number }>;
   notInterested: Array<{ tvShowName: string; tvShowYear: number }>;
+  skipped?: Array<{ tvShowName: string; tvShowYear: number }>;
   watchlistTvShows: Array<{ tvShowName: string; tvShowYear: number }>;
   languagePrefs?: string;
   genres?: string[];
@@ -39,34 +52,49 @@ export function buildTvShowRecommendationPrompt(config: {
     count,
     amazing,
     good,
+    meh = [],
     awful,
     notInterested,
+    skipped = [],
     watchlistTvShows,
     languagePrefs,
     genres,
     aiInstructions,
   } = config;
 
+  // Count total excluded shows
+  const allExcludedShows = [...amazing, ...good, ...meh, ...awful, ...notInterested, ...skipped, ...watchlistTvShows];
+
   let userPrompt = `Find ${count} highly recommended TV shows based on this user's taste:\n\n`;
+  
+  userPrompt += `⛔ EXCLUSION LIST - USER HAS ALREADY SEEN/INTERACTED WITH THESE ${allExcludedShows.length} TV SHOWS - NEVER RECOMMEND ANY OF THEM:\n\n`;
 
   if (amazing.length > 0) {
-    userPrompt += `TV SHOWS THEY LOVED:\n${amazing.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+    userPrompt += `TV SHOWS THEY LOVED (ALREADY WATCHED - EXCLUDED):\n${amazing.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
   }
 
   if (good.length > 0) {
-    userPrompt += `TV SHOWS THEY ENJOYED:\n${good.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+    userPrompt += `TV SHOWS THEY ENJOYED (ALREADY WATCHED - EXCLUDED):\n${good.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+  }
+
+  if (meh.length > 0) {
+    userPrompt += `TV SHOWS THEY RATED AS MEH (ALREADY WATCHED - EXCLUDED):\n${meh.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
   }
 
   if (awful.length > 0) {
-    userPrompt += `TV SHOWS THEY DISLIKED (avoid similar):\n${awful.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+    userPrompt += `TV SHOWS THEY DISLIKED (ALREADY WATCHED - EXCLUDED):\n${awful.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
   }
 
   if (notInterested.length > 0) {
-    userPrompt += `TV SHOWS THEY'RE NOT INTERESTED IN (NEVER recommend these or similar):\n${notInterested.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+    userPrompt += `TV SHOWS THEY'RE NOT INTERESTED IN (EXCLUDED):\n${notInterested.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
+  }
+
+  if (skipped.length > 0) {
+    userPrompt += `TV SHOWS THEY SKIPPED (EXCLUDED):\n${skipped.map((r) => `- ${r.tvShowName} (${r.tvShowYear})`).join('\n')}\n\n`;
   }
 
   if (watchlistTvShows.length > 0) {
-    userPrompt += `TV SHOWS IN THEIR WATCHLIST (NEVER recommend - already saved to watch):\n${watchlistTvShows.map((w) => `- ${w.tvShowName} (${w.tvShowYear})`).join('\n')}\n\n`;
+    userPrompt += `TV SHOWS IN THEIR WATCHLIST (ALREADY SAVED - EXCLUDED):\n${watchlistTvShows.map((w) => `- ${w.tvShowName} (${w.tvShowYear})`).join('\n')}\n\n`;
   }
 
   if (languagePrefs) {
@@ -92,16 +120,24 @@ export function buildTvShowRecommendationPrompt(config: {
   userPrompt += `- Number of seasons\n`;
   userPrompt += `- Brief reason why it matches their taste\n\n`;
   
-  // Critical rules
-  userPrompt += `🚨 CRITICAL RULES - YOU MUST FOLLOW THESE:\n`;
-  userPrompt += `1. DO NOT recommend ANY TV shows listed above (shows they loved, enjoyed, disliked, not interested in, OR in their watchlist)\n`;
-  userPrompt += `2. The user has ALREADY SEEN/RATED all shows in the ratings lists - recommend ONLY NEW shows they haven't seen\n`;
-  userPrompt += `3. NEVER recommend shows from the "NOT INTERESTED" or "WATCHLIST" sections - these are already known to the user\n`;
-  userPrompt += `4. TV shows in the WATCHLIST are saved to watch later - don't recommend them again\n`;
-  userPrompt += `5. Focus on recent shows (2020-2024) and highly rated series unless the preferences specify otherwise\n`;
-  userPrompt += `6. Every recommendation MUST be a TV show the user has NOT already rated, marked as not interested, or added to watchlist\n`;
-  userPrompt += `7. Limit recommendations to EXACTLY ${count} TV shows\n\n`;
-  userPrompt += `TRIPLE CHECK: Before recommending any TV show, verify it's NOT in ANY of the lists above (ratings, not interested, watchlist).`;
+  // Critical rules - VERY EMPHATIC
+  userPrompt += `\n🚨🚨🚨 CRITICAL EXCLUSION RULES - ABSOLUTE ZERO TOLERANCE 🚨🚨🚨\n\n`;
+  userPrompt += `YOU MUST NOT RECOMMEND ANY TV SHOW FROM THE EXCLUSION LISTS ABOVE!\n\n`;
+  userPrompt += `❌ FORBIDDEN - Never recommend shows from:\n`;
+  userPrompt += `   • "TV SHOWS THEY LOVED" - they already watched these\n`;
+  userPrompt += `   • "TV SHOWS THEY ENJOYED" - they already watched these\n`;
+  userPrompt += `   • "TV SHOWS THEY RATED AS MEH" - they already watched these\n`;
+  userPrompt += `   • "TV SHOWS THEY DISLIKED" - they already watched these\n`;
+  userPrompt += `   • "TV SHOWS NOT INTERESTED" - they rejected these\n`;
+  userPrompt += `   • "TV SHOWS SKIPPED" - they passed on these\n`;
+  userPrompt += `   • "WATCHLIST TV SHOWS" - they already saved these\n\n`;
+  userPrompt += `✅ ONLY recommend TV shows that are:\n`;
+  userPrompt += `   • NOT in any of the above lists\n`;
+  userPrompt += `   • Shows the user has NEVER seen or interacted with\n`;
+  userPrompt += `   • Fresh, new recommendations\n\n`;
+  userPrompt += `Before each recommendation, ASK YOURSELF: "Is this TV show in any exclusion list?" If YES, DO NOT RECOMMEND IT.\n\n`;
+  userPrompt += `Limit recommendations to EXACTLY ${count} TV shows.\n\n`;
+  userPrompt += `FINAL CHECK: Scan every show title in the exclusion lists. If your recommendation matches ANY of them, REMOVE IT and find a different show.`;
 
   return userPrompt;
 }

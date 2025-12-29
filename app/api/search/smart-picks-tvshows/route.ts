@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/mobile-auth";
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
@@ -10,13 +11,15 @@ const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
+    const authHeader = request.headers.get("authorization");
+    const authUser = await getCurrentUser(session, authHeader);
     
-    if (!session?.user?.email) {
+    if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
+      where: { email: authUser.email },
       select: {
         id: true,
         languages: true,
@@ -25,12 +28,23 @@ export async function POST(request: NextRequest) {
         recYearFrom: true,
         recYearTo: true,
         recMinImdb: true,
+        aiFeedback: {
+          where: {
+            feedbackType: 'tvshow',
+            isActive: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
       },
     });
 
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
+    
+    // Extract TV show feedback for filtering
+    const tvShowFeedback = user.aiFeedback?.map(f => f.feedback) || [];
     
     logger.info('TV_SHOW_SMART_PICKS', '🎯 User Preferences Loaded from Database', {
       languages: user.languages,
@@ -39,6 +53,8 @@ export async function POST(request: NextRequest) {
       recYearFrom: user.recYearFrom || 'Not set',
       recYearTo: user.recYearTo || 'Not set',
       recMinImdb: user.recMinImdb || 'Not set',
+      aiFeedbackCount: tvShowFeedback.length,
+      aiFeedback: tvShowFeedback.slice(0, 3),
     });
 
     const { searchParams } = new URL(request.url);
@@ -67,10 +83,43 @@ export async function POST(request: NextRequest) {
     // Combine all excluded TV show IDs
     const excludedTvShowIds = [...ratedTvShowIds, ...watchlistTvShowIds];
     
+    // Also get TV show ratings to create title-based exclusion
+    const ratedTvShowsWithTitles = await prisma.tvShowRating.findMany({
+      where: { userId: user.id },
+      select: { tvShowId: true, tvShowName: true, rating: true },
+    });
+    
+    const watchlistTvShowsWithTitles = await prisma.tvShowWatchlistItem.findMany({
+      where: { userId: user.id },
+      select: { tvShowId: true, tvShowName: true },
+    });
+    
+    // Create title-based exclusion set (normalized lowercase, alphanumeric only)
+    const excludedTvShowTitles = new Set<string>();
+    ratedTvShowsWithTitles.forEach(r => {
+      if (r.tvShowName) {
+        const normalizedTitle = r.tvShowName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        excludedTvShowTitles.add(normalizedTitle);
+      }
+    });
+    watchlistTvShowsWithTitles.forEach(w => {
+      if (w.tvShowName) {
+        const normalizedTitle = w.tvShowName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        excludedTvShowTitles.add(normalizedTitle);
+      }
+    });
+    
+    // Helper function to check if a title is excluded
+    const isTitleExcluded = (name: string): boolean => {
+      const normalizedTitle = name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      return excludedTvShowTitles.has(normalizedTitle);
+    };
+    
     logger.info('TV_SHOW_SMART_PICKS', 'Exclusion lists', {
       ratedTvShows: ratedTvShowIds.length,
       watchlistTvShows: watchlistTvShowIds.length,
-      totalExcluded: excludedTvShowIds.length,
+      totalExcludedIds: excludedTvShowIds.length,
+      totalExcludedTitles: excludedTvShowTitles.size,
     });
 
     // Get user's preferred languages (default to English and Hindi)
@@ -148,7 +197,10 @@ export async function POST(request: NextRequest) {
       // Save to database and add to results
       let added = 0;
       for (const tmdbShow of tmdbShows) {
-        if (!ratedTvShowIds.includes(tmdbShow.id) && !tvShows.find(s => s.id === tmdbShow.id)) {
+        // Check by ID and by title to ensure we're not adding already-rated shows
+        if (!excludedTvShowIds.includes(tmdbShow.id) && 
+            !isTitleExcluded(tmdbShow.name) && 
+            !tvShows.find(s => s.id === tmdbShow.id)) {
           try {
             const savedShow = await prisma.tvShow.upsert({
               where: { id: tmdbShow.id },
@@ -166,6 +218,8 @@ export async function POST(request: NextRequest) {
               showName: tmdbShow.name,
             });
           }
+        } else if (isTitleExcluded(tmdbShow.name)) {
+          logger.warn('TV_SHOW_SMART_PICKS', `⚠️ Skipping "${tmdbShow.name}" - user already rated/watchlisted this show`);
         }
       }
       
@@ -175,17 +229,39 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // DOUBLE VALIDATION: Filter out ALL already-interacted TV shows (rated + watchlist)
+    // TRIPLE VALIDATION: Filter out ALL already-interacted TV shows (by ID AND by title)
     const beforeFilterCount = tvShows.length;
-    tvShows = tvShows.filter(show => !excludedTvShowIds.includes(show.id));
+    const filteredOutShows: string[] = [];
+    
+    tvShows = tvShows.filter(show => {
+      // Check by ID first
+      if (excludedTvShowIds.includes(show.id)) {
+        filteredOutShows.push(`${show.name} (ID: ${show.id})`);
+        return false;
+      }
+      // Check by name (case-insensitive, alphanumeric only)
+      if (isTitleExcluded(show.name)) {
+        filteredOutShows.push(`${show.name} (Name Match)`);
+        return false;
+      }
+      // Also check original name if different
+      if (show.originalName && show.originalName !== show.name && isTitleExcluded(show.originalName)) {
+        filteredOutShows.push(`${show.name}/${show.originalName} (Original Name Match)`);
+        return false;
+      }
+      return true;
+    });
+    
     const filteredCount = beforeFilterCount - tvShows.length;
 
     if (filteredCount > 0) {
-      logger.warn('TV_SHOW_SMART_PICKS', '⚠️ DOUBLE VALIDATION: Found already-rated/watchlist TV shows!', {
+      logger.warn('TV_SHOW_SMART_PICKS', '⚠️ TRIPLE VALIDATION: Filtered out already-rated/watchlist TV shows!', {
         beforeCount: beforeFilterCount,
         afterCount: tvShows.length,
         filteredOut: filteredCount,
-        excludedCount: excludedTvShowIds.length,
+        filteredShows: filteredOutShows,
+        excludedIdCount: excludedTvShowIds.length,
+        excludedTitleCount: excludedTvShowTitles.size,
         breakdown: {
           totalRated: ratedTvShowIds.length,
           watchlist: watchlistTvShowIds.length,
@@ -195,7 +271,8 @@ export async function POST(request: NextRequest) {
     
     logger.info('TV_SHOW_SMART_PICKS', '✅ FINAL TV SHOWS AFTER EXCLUSION FILTER', {
       tvShowsReturning: tvShows.length,
-      totalExcluded: excludedTvShowIds.length,
+      totalExcludedIds: excludedTvShowIds.length,
+      totalExcludedTitles: excludedTvShowTitles.size,
       verifiedNoOverlap: true,
     });
 

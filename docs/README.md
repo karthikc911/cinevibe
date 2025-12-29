@@ -1,6 +1,6 @@
-# 📚 CineMate Documentation
+# 📚 CineVibe Documentation
 
-Complete documentation for the CineMate movie recommendation application.
+Complete documentation for the CineVibe movie recommendation application.
 
 ## 📖 Table of Contents
 
