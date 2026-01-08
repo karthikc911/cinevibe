@@ -25,8 +25,8 @@ import { authApi } from '../lib/api';
 // Complete auth session handling
 WebBrowser.maybeCompleteAuthSession();
 
-// Get your backend URL - Update this to your actual backend URL
-const BACKEND_URL = 'http://10.0.0.17:3000';
+// Production backend URL
+const BACKEND_URL = 'https://cinevibe-six.vercel.app';
 
 // Google OAuth Client IDs
 // IMPORTANT: Replace these with your actual Google OAuth Client IDs
@@ -110,8 +110,9 @@ export default function LoginScreen() {
           await authApi.setToken(data.token);
         }
         
-        login(data.user);
-        setIsUsingDemoMode(false);
+        // Login and persist session (async)
+        await login(data.user);
+        await setIsUsingDemoMode(false);
         router.replace('/(tabs)');
       } else {
         Alert.alert('Login Failed', data.error || 'Failed to authenticate with Google');
@@ -155,8 +156,9 @@ export default function LoginScreen() {
           await authApi.setToken(data.token);
         }
         
-        login(data.user);
-        setIsUsingDemoMode(false);
+        // Login and persist session (async)
+        await login(data.user);
+        await setIsUsingDemoMode(false);
         router.replace('/(tabs)');
       } else {
         // Show specific error message from backend
@@ -171,7 +173,7 @@ export default function LoginScreen() {
       console.log('[LOGIN] Network error:', error?.message || error);
       Alert.alert(
         'Connection Error',
-        `Could not connect to server at ${BACKEND_URL}. Error: ${error?.message || 'Unknown error'}. Make sure your phone is on the same WiFi network as your computer.`
+        `Could not connect to server. Error: ${error?.message || 'Network error'}. Please check your internet connection and try again.`
       );
     } finally {
       setLoading(false);
@@ -199,9 +201,10 @@ export default function LoginScreen() {
     }
   };
 
-  const handleDemoLogin = () => {
-    login(DEMO_USER);
-    setIsUsingDemoMode(true);
+  const handleDemoLogin = async () => {
+    // Login and persist demo session
+    await login(DEMO_USER);
+    await setIsUsingDemoMode(true);
     router.replace('/(tabs)');
   };
 

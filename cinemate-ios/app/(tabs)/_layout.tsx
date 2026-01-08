@@ -1,19 +1,25 @@
 import { Tabs } from 'expo-router';
-import { View, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet } from 'react-native';
 import { Home, Search, Bookmark, Users, User } from 'lucide-react-native';
 import { Colors } from '../../lib/constants';
 
 export default function TabLayout() {
+  // Memoize screen options to prevent re-calculation
+  const screenOptions = useMemo(() => ({
+    headerShown: false,
+    tabBarStyle: styles.tabBar,
+    tabBarActiveTintColor: Colors.primary,
+    tabBarInactiveTintColor: Colors.textMuted,
+    tabBarLabelStyle: styles.tabBarLabel,
+    // Performance settings for production:
+    animation: 'none' as const, // Instant tab switch, no animation delay
+    lazy: true, // Load tabs only when visited (prevents all tabs loading at once)
+    freezeOnBlur: true, // Freeze inactive tabs to prevent unnecessary re-renders
+  }), []);
+
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
-        tabBarLabelStyle: styles.tabBarLabel,
-      }}
-    >
+    <Tabs screenOptions={screenOptions}>
       <Tabs.Screen
         name="index"
         options={{

@@ -3,12 +3,17 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 // POST - Send movie recommendation to friends
 export async function POST(request: NextRequest) {
   try {
+    // Support both web session and mobile token authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get('authorization');
+    const user = await getCurrentUser(session, authHeader);
+    
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,14 +27,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Movie ID and title are required' }, { status: 400 });
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
-
-    if (!currentUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    // User is already fetched by getCurrentUser, just need the id and name
+    const currentUser = { id: user.id, name: user.name };
 
     // Verify all friend IDs are valid friendships
     const friendships = await prisma.friendship.findMany({

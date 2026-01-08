@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, memo } from 'react';
 import {
   View,
   Text,
@@ -10,11 +10,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { User, Star, Film, Tv, LogOut, Settings, ChevronRight, Heart } from 'lucide-react-native';
+import { User, Star, Film, Tv, LogOut, Settings, ChevronRight, Heart, LogIn, ThumbsUp } from 'lucide-react-native';
 import { useAppStore } from '../../lib/store';
 import { Colors, RatingColors } from '../../lib/constants';
 import { DEMO_RATINGS, DEMO_WATCHLIST } from '../../lib/mockData';
 import { ratingsApi, watchlistApi, authApi } from '../../lib/api';
+import { movieRatingsCache, tvShowRatingsCache, movieWatchlistCache, tvShowWatchlistCache } from '../../lib/cache';
+import { LoadingSpinner } from '../../components/LoadingSpinner';
 
 interface RatingStats {
   total: number;
@@ -25,11 +27,30 @@ interface RatingStats {
   'not-interested': number;
 }
 
+// Memoized login prompt
+const LoginPrompt = memo(({ onPress }: { onPress: () => void }) => (
+  <View style={styles.loginPrompt}>
+    <LogIn color={Colors.primary} size={64} />
+    <Text style={styles.loginTitle}>Sign In Required</Text>
+    <Text style={styles.loginSubtitle}>
+      Please sign in to view your profile and ratings
+    </Text>
+    <TouchableOpacity style={styles.loginButton} onPress={onPress}>
+      <Text style={styles.loginButtonText}>Sign In</Text>
+    </TouchableOpacity>
+  </View>
+));
+
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isUsingDemoMode, logout, clearAll } = useAppStore();
-  const [loading, setLoading] = useState(true);
+  const { user, isAuthenticated, isUsingDemoMode, isSessionRestored, logout, clearAll } = useAppStore();
+  
+  // State
   const [watchlistCount, setWatchlistCount] = useState(0);
+  const [dataLoading, setDataLoading] = useState(true);
+  const isMounted = useRef(true);
+  const hasLoaded = useRef(false);
+  const loadSessionRef = useRef(0);
   
   const [movieStats, setMovieStats] = useState<RatingStats>({
     total: 0,
@@ -49,236 +70,270 @@ export default function ProfileScreen() {
     'not-interested': 0,
   });
 
-  useEffect(() => {
-    loadStats();
-  }, [isUsingDemoMode]);
+  const calculateStats = (ratings: any[]): RatingStats => {
+    const stats: RatingStats = {
+      total: ratings.length,
+      amazing: 0,
+      good: 0,
+      meh: 0,
+      bad: 0,
+      'not-interested': 0,
+    };
+    ratings.forEach((r: any) => {
+      if (r.rating === 'amazing') stats.amazing++;
+      else if (r.rating === 'good') stats.good++;
+      else if (r.rating === 'meh') stats.meh++;
+      else if (r.rating === 'awful' || r.rating === 'bad') stats.bad++;
+      else if (r.rating === 'not-interested' || r.rating === 'skipped') stats['not-interested']++;
+    });
+    return stats;
+  };
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
+    const currentSession = ++loadSessionRef.current;
+    const isSessionValid = () => isMounted.current && loadSessionRef.current === currentSession;
+
     if (isUsingDemoMode) {
-      // Demo stats
-      setMovieStats({
-        total: 45,
-        amazing: 12,
-        good: 18,
-        meh: 8,
-        bad: 4,
-        'not-interested': 3,
-      });
-      setTvStats({
-        total: 23,
-        amazing: 8,
-        good: 10,
-        meh: 3,
-        bad: 1,
-        'not-interested': 1,
-      });
-      setWatchlistCount(DEMO_WATCHLIST.length + 5);
-      setLoading(false);
+      const movieRatings = DEMO_RATINGS.filter((r: any) => r.type !== 'tvshow');
+      const tvRatings = DEMO_RATINGS.filter((r: any) => r.type === 'tvshow');
+      setMovieStats(calculateStats(movieRatings));
+      setTvStats(calculateStats(tvRatings));
+      setWatchlistCount(DEMO_WATCHLIST.length);
+      setDataLoading(false);
       return;
     }
 
+    // Show cached data IMMEDIATELY
     try {
-      // Fetch real stats from API
-      const [movieRatings, tvRatings, watchlist, tvWatchlist] = await Promise.all([
+      const [cachedMovieRatings, cachedTvRatings, cachedMovieWatchlist, cachedTvWatchlist] = await Promise.all([
+        movieRatingsCache.get(),
+        tvShowRatingsCache.get(),
+        movieWatchlistCache.get(),
+        tvShowWatchlistCache.get(),
+      ]);
+
+      if (!isSessionValid()) return;
+
+      if (cachedMovieRatings.data) setMovieStats(calculateStats(cachedMovieRatings.data));
+      if (cachedTvRatings.data) setTvStats(calculateStats(cachedTvRatings.data));
+      setWatchlistCount((cachedMovieWatchlist.data?.length || 0) + (cachedTvWatchlist.data?.length || 0));
+      setDataLoading(false);
+
+      if (!cachedMovieRatings.isStale && !cachedTvRatings.isStale) return;
+    } catch (e) {}
+
+    // Fetch fresh data
+    try {
+      const [movieRatings, tvRatings, movieWatchlist, tvWatchlist] = await Promise.all([
         ratingsApi.getRatings().catch(() => []),
         ratingsApi.getTvShowRatings().catch(() => []),
         watchlistApi.getWatchlist().catch(() => []),
         watchlistApi.getTvShowWatchlist().catch(() => []),
       ]);
 
-      // Calculate movie stats
-      const mStats: RatingStats = {
-        total: movieRatings.length,
-        amazing: 0,
-        good: 0,
-        meh: 0,
-        bad: 0,
-        'not-interested': 0,
-      };
-      movieRatings.forEach((r: any) => {
-        if (r.rating === 'amazing') mStats.amazing++;
-        else if (r.rating === 'good') mStats.good++;
-        else if (r.rating === 'meh') mStats.meh++;
-        else if (r.rating === 'awful' || r.rating === 'bad') mStats.bad++;
-        else if (r.rating === 'not-interested' || r.rating === 'skipped') mStats['not-interested']++;
-      });
-      setMovieStats(mStats);
+      if (!isSessionValid()) return;
 
-      // Calculate TV stats
-      const tStats: RatingStats = {
-        total: tvRatings.length,
-        amazing: 0,
-        good: 0,
-        meh: 0,
-        bad: 0,
-        'not-interested': 0,
-      };
-      tvRatings.forEach((r: any) => {
-        if (r.rating === 'amazing') tStats.amazing++;
-        else if (r.rating === 'good') tStats.good++;
-        else if (r.rating === 'meh') tStats.meh++;
-        else if (r.rating === 'awful' || r.rating === 'bad') tStats.bad++;
-        else if (r.rating === 'not-interested' || r.rating === 'skipped') tStats['not-interested']++;
-      });
-      setTvStats(tStats);
+      setMovieStats(calculateStats(movieRatings || []));
+      setTvStats(calculateStats(tvRatings || []));
+      setWatchlistCount((movieWatchlist?.length || 0) + (tvWatchlist?.length || 0));
 
-      setWatchlistCount(watchlist.length + tvWatchlist.length);
+      // Cache (fire and forget)
+      if (movieRatings?.length) movieRatingsCache.set(movieRatings).catch(() => {});
+      if (tvRatings?.length) tvShowRatingsCache.set(tvRatings).catch(() => {});
     } catch (error) {
-      console.error('Error loading stats:', error);
+      console.error('[PROFILE] Error loading stats:', error);
     } finally {
-      setLoading(false);
+      if (isSessionValid()) {
+        setDataLoading(false);
+      }
     }
-  };
+  }, [isUsingDemoMode]);
+
+  // Load data when authenticated
+  useEffect(() => {
+    isMounted.current = true;
+    
+    if (isSessionRestored && isAuthenticated) {
+      if (!hasLoaded.current) {
+        hasLoaded.current = true;
+        // Keep dataLoading true and load data
+        // Double requestAnimationFrame GUARANTEES a paint has occurred
+        // First rAF: Browser commits the frame with loading screen
+        // Second rAF: Now we can safely load data
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (isMounted.current) loadStats();
+          });
+        });
+      } else {
+        // Already loaded, turn off loading
+        setDataLoading(false);
+      }
+    } else if (isSessionRestored && !isAuthenticated) {
+      // Not authenticated, no need to show loading
+      setDataLoading(false);
+    }
+    // If session not restored yet, keep showing loading
+    
+    return () => {
+      loadSessionRef.current++;
+      isMounted.current = false;
+    };
+  }, [isSessionRestored, isAuthenticated, loadStats]);
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out?', [
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Log Out',
+        text: 'Logout',
         style: 'destructive',
         onPress: async () => {
-          // Clear auth token
           await authApi.clearToken();
-          logout();
           clearAll();
+          logout();
           router.replace('/login');
         },
       },
     ]);
   };
 
+  const totalRatings = movieStats.total + tvStats.total;
+
+  const renderStatItem = (label: string, value: number, color: string) => (
+    <View style={styles.statItem}>
+      <View style={[styles.statDot, { backgroundColor: color }]} />
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
+    </View>
+  );
+
+  // Show loading while session is being restored
+  if (!isSessionRestored) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoadingSpinner message="Initializing..." />
+      </SafeAreaView>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoginPrompt onPress={() => router.push('/login')} />
+      </SafeAreaView>
+    );
+  }
+
+  // Show full-screen loading while data is loading
+  if (dataLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <LoadingSpinner message="Loading profile..." />
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.avatarContainer}>
-            <View style={styles.avatar}>
-              <User color={Colors.primary} size={40} />
-            </View>
-          </View>
-          <Text style={styles.name}>{user?.name || 'Demo User'}</Text>
-          <Text style={styles.email}>{user?.email || 'demo@cinemate.app'}</Text>
-          <View style={styles.badgeContainer}>
-            <View style={styles.badge}>
-              <Heart color={Colors.error} size={14} fill={Colors.error} />
-              <Text style={styles.badgeText}>Movie Enthusiast</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Stats Overview */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Your Activity</Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Film color={Colors.primary} size={24} />
-              <Text style={styles.statNumber}>{movieStats.total}</Text>
-              <Text style={styles.statLabel}>Movies Rated</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Tv color={Colors.secondary} size={24} />
-              <Text style={styles.statNumber}>{tvStats.total}</Text>
-              <Text style={styles.statLabel}>TV Shows Rated</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Star color={Colors.warning} size={24} />
-              <Text style={styles.statNumber}>{watchlistCount}</Text>
-              <Text style={styles.statLabel}>In Watchlist</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Movie Ratings Breakdown */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Movie Ratings</Text>
-          <View style={styles.ratingsBreakdown}>
-            {[
-              { key: 'amazing', label: '🤩 Amazing', count: movieStats.amazing },
-              { key: 'good', label: '👍 Good', count: movieStats.good },
-              { key: 'meh', label: '😐 Meh', count: movieStats.meh },
-              { key: 'bad', label: '👎 Bad', count: movieStats.bad },
-              { key: 'not-interested', label: '🚫 Not Interested', count: movieStats['not-interested'] },
-            ].map((item) => (
-              <View key={item.key} style={styles.ratingRow}>
-                <Text style={styles.ratingLabel}>{item.label}</Text>
-                <View style={styles.ratingBarContainer}>
-                  <View
-                    style={[
-                      styles.ratingBar,
-                      {
-                        width: movieStats.total > 0 ? `${(item.count / movieStats.total) * 100}%` : '0%',
-                        backgroundColor: RatingColors[item.key],
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.ratingCount}>{item.count}</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Profile Header */}
+          <View style={styles.header}>
+            <View style={styles.avatarContainer}>
+              <View style={styles.avatar}>
+                <User color={Colors.primary} size={40} />
               </View>
-            ))}
-          </View>
-        </View>
-
-        {/* TV Show Ratings Breakdown */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>TV Show Ratings</Text>
-          <View style={styles.ratingsBreakdown}>
-            {[
-              { key: 'amazing', label: '🤩 Amazing', count: tvStats.amazing },
-              { key: 'good', label: '👍 Good', count: tvStats.good },
-              { key: 'meh', label: '😐 Meh', count: tvStats.meh },
-              { key: 'bad', label: '👎 Bad', count: tvStats.bad },
-              { key: 'not-interested', label: '🚫 Not Interested', count: tvStats['not-interested'] },
-            ].map((item) => (
-              <View key={item.key} style={styles.ratingRow}>
-                <Text style={styles.ratingLabel}>{item.label}</Text>
-                <View style={styles.ratingBarContainer}>
-                  <View
-                    style={[
-                      styles.ratingBar,
-                      {
-                        width: tvStats.total > 0 ? `${(item.count / tvStats.total) * 100}%` : '0%',
-                        backgroundColor: RatingColors[item.key],
-                      },
-                    ]}
-                  />
+              {isUsingDemoMode && (
+                <View style={styles.demoBadge}>
+                  <Text style={styles.demoBadgeText}>DEMO</Text>
                 </View>
-                <Text style={styles.ratingCount}>{item.count}</Text>
-              </View>
-            ))}
+              )}
+            </View>
+            <Text style={styles.userName}>{user?.name || 'User'}</Text>
+            <Text style={styles.userEmail}>{user?.email || 'user@example.com'}</Text>
           </View>
-        </View>
 
-        {/* Menu Items */}
-        <View style={styles.section}>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/rate')}>
-            <Star color={Colors.primary} size={22} />
-            <Text style={styles.menuText}>Rate Movies</Text>
-            <ChevronRight color={Colors.textMuted} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/preferences')}>
-            <Settings color={Colors.textSecondary} size={22} />
-            <Text style={styles.menuText}>Preferences</Text>
-            <ChevronRight color={Colors.textMuted} size={20} />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
-            <LogOut color={Colors.error} size={22} />
-            <Text style={[styles.menuText, { color: Colors.error }]}>Log Out</Text>
-            <ChevronRight color={Colors.textMuted} size={20} />
-          </TouchableOpacity>
-        </View>
+          {/* Quick Stats */}
+          <View style={styles.quickStats}>
+            <View style={styles.quickStatItem}>
+              <Star color={Colors.primary} size={20} fill={Colors.primary} />
+              <Text style={styles.quickStatValue}>{totalRatings}</Text>
+              <Text style={styles.quickStatLabel}>Ratings</Text>
+            </View>
+            <View style={styles.quickStatDivider} />
+            <View style={styles.quickStatItem}>
+              <Heart color={Colors.error} size={20} fill={Colors.error} />
+              <Text style={styles.quickStatValue}>{watchlistCount}</Text>
+              <Text style={styles.quickStatLabel}>Watchlist</Text>
+            </View>
+          </View>
 
-        {/* App Info */}
-        <View style={styles.appInfo}>
-          <Text style={styles.appName}>CineVibe</Text>
-          <Text style={styles.version}>Version 1.0.0</Text>
-          {isUsingDemoMode && (
-            <Text style={styles.demoNote}>
-              Demo mode - Using mock data
-            </Text>
-          )}
-        </View>
-      </ScrollView>
+          {/* Movie Ratings */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Film color={Colors.primary} size={20} />
+              <Text style={styles.sectionTitle}>Movie Ratings</Text>
+              <Text style={styles.sectionCount}>{movieStats.total}</Text>
+            </View>
+            {dataLoading && movieStats.total === 0 ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <View style={styles.statsGrid}>
+                {renderStatItem('Amazing', movieStats.amazing, RatingColors.amazing)}
+                {renderStatItem('Good', movieStats.good, RatingColors.good)}
+                {renderStatItem('Meh', movieStats.meh, RatingColors.meh)}
+                {renderStatItem('Bad', movieStats.bad, RatingColors.bad)}
+                {renderStatItem('Skip', movieStats['not-interested'], RatingColors.skip)}
+              </View>
+            )}
+          </View>
+
+          {/* TV Show Ratings */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Tv color="#9333ea" size={20} />
+              <Text style={styles.sectionTitle}>TV Show Ratings</Text>
+              <Text style={styles.sectionCount}>{tvStats.total}</Text>
+            </View>
+            {dataLoading && tvStats.total === 0 ? (
+              <ActivityIndicator size="small" color={Colors.primary} />
+            ) : (
+              <View style={styles.statsGrid}>
+                {renderStatItem('Amazing', tvStats.amazing, RatingColors.amazing)}
+                {renderStatItem('Good', tvStats.good, RatingColors.good)}
+                {renderStatItem('Meh', tvStats.meh, RatingColors.meh)}
+                {renderStatItem('Bad', tvStats.bad, RatingColors.bad)}
+                {renderStatItem('Skip', tvStats['not-interested'], RatingColors.skip)}
+              </View>
+            )}
+          </View>
+
+          {/* Menu Items */}
+          <View style={styles.menuSection}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/rate')}>
+              <ThumbsUp color={Colors.primary} size={20} />
+              <Text style={styles.menuText}>Rate Movies & TV Shows</Text>
+              <ChevronRight color={Colors.textMuted} size={20} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/ratings-list')}>
+              <Star color={Colors.textSecondary} size={20} />
+              <Text style={styles.menuText}>View All Ratings</Text>
+              <ChevronRight color={Colors.textMuted} size={20} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/preferences')}>
+              <Settings color={Colors.textSecondary} size={20} />
+              <Text style={styles.menuText}>Preferences</Text>
+              <ChevronRight color={Colors.textMuted} size={20} />
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.menuItem, styles.logoutItem]} onPress={handleLogout}>
+              <LogOut color={Colors.error} size={20} />
+              <Text style={[styles.menuText, styles.logoutText]}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
     </SafeAreaView>
   );
 }
@@ -288,14 +343,45 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  loginPrompt: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  loginTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  loginButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 48,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  loginButtonText: {
+    color: Colors.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  content: {
+    paddingBottom: 100,
+  },
   header: {
     alignItems: 'center',
-    paddingVertical: 32,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingVertical: 24,
   },
   avatarContainer: {
-    marginBottom: 16,
+    position: 'relative',
   },
   avatar: {
     width: 80,
@@ -304,130 +390,138 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
+    borderWidth: 2,
     borderColor: Colors.primary,
   },
-  name: {
+  demoBadge: {
+    position: 'absolute',
+    bottom: -4,
+    left: '50%',
+    transform: [{ translateX: -20 }],
+    backgroundColor: Colors.warning,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  demoBadgeText: {
+    color: Colors.background,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  userName: {
     color: Colors.text,
     fontSize: 22,
     fontWeight: '700',
-    marginBottom: 4,
+    marginTop: 12,
   },
-  email: {
+  userEmail: {
     color: Colors.textSecondary,
     fontSize: 14,
-    marginBottom: 12,
+    marginTop: 4,
   },
-  badgeContainer: {
+  quickStats: {
     flexDirection: 'row',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  badgeText: {
-    color: Colors.error,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  section: {
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  sectionTitle: {
-    color: Colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  statCard: {
-    flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    paddingVertical: 20,
+    marginBottom: 24,
+  },
+  quickStatItem: {
+    flex: 1,
     alignItems: 'center',
   },
-  statNumber: {
+  quickStatValue: {
     color: Colors.text,
     fontSize: 24,
     fontWeight: '800',
     marginTop: 8,
   },
-  statLabel: {
+  quickStatLabel: {
     color: Colors.textSecondary,
-    fontSize: 11,
-    marginTop: 4,
-    textAlign: 'center',
+    fontSize: 12,
+    marginTop: 2,
   },
-  ratingsBreakdown: {
-    gap: 12,
+  quickStatDivider: {
+    width: 1,
+    backgroundColor: Colors.border,
   },
-  ratingRow: {
+  section: {
+    backgroundColor: Colors.surface,
+    marginHorizontal: 16,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 16,
   },
-  ratingLabel: {
+  sectionTitle: {
     color: Colors.text,
-    fontSize: 13,
-    width: 120,
-  },
-  ratingBarContainer: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 10,
     flex: 1,
+  },
+  sectionCount: {
+    color: Colors.textSecondary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  statDot: {
+    width: 8,
     height: 8,
-    backgroundColor: Colors.surface,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  ratingBar: {
-    height: '100%',
     borderRadius: 4,
   },
-  ratingCount: {
+  statLabel: {
     color: Colors.textSecondary,
     fontSize: 13,
-    width: 30,
-    textAlign: 'right',
+  },
+  statValue: {
+    color: Colors.text,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  menuSection: {
+    marginHorizontal: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
     gap: 12,
   },
   menuText: {
-    flex: 1,
     color: Colors.text,
     fontSize: 16,
+    flex: 1,
   },
-  appInfo: {
-    alignItems: 'center',
-    paddingVertical: 32,
+  logoutItem: {
+    borderBottomWidth: 0,
   },
-  appName: {
-    color: Colors.primary,
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  version: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    marginTop: 4,
-  },
-  demoNote: {
-    color: Colors.textMuted,
-    fontSize: 11,
-    marginTop: 8,
-    fontStyle: 'italic',
+  logoutText: {
+    color: Colors.error,
   },
 });

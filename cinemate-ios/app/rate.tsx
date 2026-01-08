@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -30,6 +30,7 @@ import { Colors, LanguageNames, TMDB_IMAGE_BASE } from '../lib/constants';
 import { Movie, TvShow, RatingType } from '../lib/types';
 import { MOVIES_TO_RATE, TVSHOWS_TO_RATE } from '../lib/mockData';
 import { moviesApi, tvShowsApi, ratingsApi, watchlistApi } from '../lib/api';
+import { rateMoviesCache, rateTvShowsCache } from '../lib/cache';
 
 const { width, height } = Dimensions.get('window');
 
@@ -65,9 +66,9 @@ export default function RateScreen() {
   const [tvShowsRatedCount, setTvShowsRatedCount] = useState(0);
 
   const { user, addToMovieWatchlist, addToTvShowWatchlist, isUsingDemoMode } = useAppStore();
+  const isMounted = useRef(true);
 
   const loadMovies = useCallback(async () => {
-    setLoading(true);
     console.log('[RATE] Loading movies for rating...');
     console.log('[RATE] User preferences:', { 
       languages: user?.languages || 'None', 
@@ -75,50 +76,105 @@ export default function RateScreen() {
       isDemo: isUsingDemoMode 
     });
     
+    // Step 1: Show cached data IMMEDIATELY
+    const { data: cachedMovies, isStale } = await rateMoviesCache.get();
+    if (!isMounted.current) return;
+    
+    if (cachedMovies && cachedMovies.length > 0) {
+      setMovies(cachedMovies);
+      setLoading(false);
+      // If cache is fresh, we're done
+      if (!isStale) return;
+    } else {
+      setLoading(true);
+    }
+
+    // Step 2: Fetch fresh data in background
     try {
       if (!isUsingDemoMode) {
-        // This endpoint uses user preferences from the database
-        const result = await moviesApi.getRateMovies();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 8000)
+        );
+        const apiPromise = moviesApi.getRateMovies();
+        
+        const result = await Promise.race([apiPromise, timeoutPromise]) as any;
+        if (!isMounted.current) return;
+        
         console.log('[RATE] Loaded', result?.length || 0, 'movies from API');
         if (result && result.length > 0) {
           setMovies(result);
+          // Cache the results (fire and forget)
+          rateMoviesCache.set(result);
           setLoading(false);
           return;
         }
       }
     } catch (e) {
-      console.log('[RATE] API unavailable, using mock data:', e);
+      console.log('[RATE] API unavailable or slow:', e);
     }
-    await new Promise(resolve => setTimeout(resolve, 400));
-    setMovies([...MOVIES_TO_RATE]);
+    
+    if (!isMounted.current) return;
+    
+    // Fallback to mock data only if we have nothing
+    setMovies(prev => prev.length === 0 ? [...MOVIES_TO_RATE] : prev);
     setLoading(false);
   }, [isUsingDemoMode, user]);
 
   const loadTvShows = useCallback(async () => {
-    setLoading(true);
+    // Step 1: Show cached data IMMEDIATELY
+    const { data: cachedTvShows, isStale } = await rateTvShowsCache.get();
+    if (!isMounted.current) return;
+    
+    if (cachedTvShows && cachedTvShows.length > 0) {
+      setTvShows(cachedTvShows);
+      setLoading(false);
+      if (!isStale) return;
+    } else {
+      setLoading(true);
+    }
+
+    // Step 2: Fetch fresh data in background
     try {
       if (!isUsingDemoMode) {
-        const result = await tvShowsApi.getSmartPicks();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout')), 8000)
+        );
+        const apiPromise = tvShowsApi.getSmartPicks();
+        
+        const result = await Promise.race([apiPromise, timeoutPromise]) as any;
+        if (!isMounted.current) return;
+        
         if (result && result.tvShows && result.tvShows.length > 0) {
           setTvShows(result.tvShows);
+          // Cache the results (fire and forget)
+          rateTvShowsCache.set(result.tvShows);
           setLoading(false);
           return;
         }
       }
     } catch (e) {
-      console.log('API unavailable, using mock data');
+      console.log('[RATE] API unavailable or slow for TV shows');
     }
-    await new Promise(resolve => setTimeout(resolve, 400));
-    setTvShows([...TVSHOWS_TO_RATE]);
+    
+    if (!isMounted.current) return;
+    
+    // Fallback to mock data only if we have nothing
+    setTvShows(prev => prev.length === 0 ? [...TVSHOWS_TO_RATE] : prev);
     setLoading(false);
   }, [isUsingDemoMode]);
 
   useEffect(() => {
+    isMounted.current = true;
+    
     if (activeTab === 'movies') {
       if (movies.length === 0) loadMovies();
     } else {
       if (tvShows.length === 0) loadTvShows();
     }
+    
+    return () => {
+      isMounted.current = false;
+    };
   }, [activeTab]);
 
   const currentMovie = movies[0];
@@ -234,10 +290,7 @@ export default function RateScreen() {
   const totalCount = activeTab === 'movies' ? movies.length : tvShows.length;
   const ratedCount = activeTab === 'movies' ? moviesRatedCount : tvShowsRatedCount;
 
-  if (loading) {
-    const userPrefs = user?.languages?.slice(0, 2).join(', ') || 'your preferences';
-    return <LoadingSpinner message={`Loading ${activeTab === 'movies' ? 'movies' : 'TV shows'} based on ${userPrefs}...`} />;
-  }
+  // NEVER block navigation - page shows immediately
 
   const isEmpty = (activeTab === 'movies' && movies.length === 0) || 
                   (activeTab === 'tvshows' && tvShows.length === 0);
@@ -302,7 +355,11 @@ export default function RateScreen() {
         />
       </View>
 
-      {isEmpty ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <LoadingSpinner message={`Loading ${activeTab === 'movies' ? 'movies' : 'TV shows'}...`} />
+        </View>
+      ) : isEmpty ? (
         <EmptyState
           emoji="🎉"
           title="All caught up!"
@@ -336,6 +393,7 @@ export default function RateScreen() {
             {/* Poster */}
             {posterUrl ? (
               <Image
+                key={currentItem?.id} // Force remount when movie/tvshow changes
                 source={{ uri: posterUrl }}
                 style={styles.fullPoster}
                 contentFit="contain"
@@ -428,6 +486,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

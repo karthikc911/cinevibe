@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
+import { getCurrentUser } from '@/lib/mobile-auth';
 
 // PATCH - Accept or reject friend request
 export async function PATCH(
@@ -10,8 +11,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Support both web session and mobile token authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get('authorization');
+    const user = await getCurrentUser(session, authHeader);
+    
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,14 +29,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true },
-    });
-
-    if (!currentUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const currentUser = { id: user.id, name: user.name };
 
     // Find the friend request
     const friendRequest = await prisma.friendship.findUnique({
@@ -118,22 +116,19 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Support both web session and mobile token authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get('authorization');
+    const user = await getCurrentUser(session, authHeader);
+    
+    if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Await params for Next.js 15
     const { id } = await params;
 
-    const currentUser = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true },
-    });
-
-    if (!currentUser) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
+    const currentUser = { id: user.id };
 
     // Find the friend request
     const friendRequest = await prisma.friendship.findUnique({

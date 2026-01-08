@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { TrendingUp, Film, Tv, RefreshCw, Flame } from 'lucide-react-native';
 import { MovieCard } from '../../components/MovieCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
@@ -20,68 +21,197 @@ import { Colors } from '../../lib/constants';
 import { Movie, TvShow, RatingType } from '../../lib/types';
 import { RatingButtonGroup } from '../../components/RatingButton';
 import { TRENDING_MOVIES, TRENDING_TVSHOWS } from '../../lib/mockData';
+import { trendingMoviesCache, trendingTvShowsCache } from '../../lib/cache';
 
 type ContentType = 'movies' | 'tvshows';
 
 export default function HomeScreen() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ContentType>('movies');
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [ratingItem, setRatingItem] = useState<Movie | TvShow | null>(null);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [tvShows, setTvShows] = useState<TvShow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [useLocalData, setUseLocalData] = useState(false);
+  const [isReady, setIsReady] = useState(false); // Component ready to show content
 
-  const { user, isUsingDemoMode, addToMovieWatchlist, addToTvShowWatchlist } = useAppStore();
+  const { user, isUsingDemoMode, isSessionRestored, addToMovieWatchlist, addToTvShowWatchlist } = useAppStore();
+  const isMounted = useRef(true);
+  const hasLoadedMovies = useRef(false);
+  const hasLoadedTvShows = useRef(false);
+  const loadSessionRef = useRef(0); // Track load session to abort stale requests
 
-  const loadData = useCallback(async (isRefresh = false) => {
+  const loadData = useCallback(async (isRefresh = false, currentTab?: ContentType) => {
+    // Increment session to invalidate any previous in-flight requests
+    const currentSession = ++loadSessionRef.current;
+    
+    // Helper to check if this load session is still valid
+    const isSessionValid = () => isMounted.current && loadSessionRef.current === currentSession;
+    
+    const tab = currentTab || activeTab;
+    console.log(`[HOME] Loading ${tab} data, isRefresh: ${isRefresh}`);
+    
     try {
-      if (!isRefresh) setLoading(true);
       setError(null);
 
-      if (activeTab === 'movies') {
+      if (tab === 'movies') {
+        // Step 1: Show cached or mock data IMMEDIATELY (never empty)
+        if (!isRefresh) {
+          const { data: cachedMovies, isStale } = await trendingMoviesCache.get();
+          if (!isSessionValid()) return;
+          if (cachedMovies && cachedMovies.length > 0) {
+            console.log('[HOME] Showing cached movies:', cachedMovies.length);
+            setMovies(cachedMovies);
+            if (!isStale) {
+              setRefreshing(false);
+              return;
+            }
+          } else {
+            // Show mock data immediately while fetching
+            console.log('[HOME] No cache, showing mock movies while fetching');
+            setMovies(TRENDING_MOVIES);
+          }
+        }
+
+        // Step 2: Always try to fetch fresh data from API (trending is public)
         try {
-          // Fetch trending movies from TMDB
+          console.log('[HOME] Fetching trending movies from API...');
           const result = await moviesApi.getTrending('day');
-          setMovies(result || []);
-          setUseLocalData(false);
-        } catch (apiError) {
-          console.log('API unavailable, using mock data');
-          setMovies(TRENDING_MOVIES);
-          setUseLocalData(true);
+          
+          if (!isSessionValid()) return;
+          
+          if (result && result.length > 0) {
+            console.log('[HOME] Got movies from API:', result.length);
+            setMovies(result);
+            trendingMoviesCache.set(result).catch(() => {});
+          }
+          // If API returns empty, keep showing current data (mock or cached)
+        } catch (apiError: any) {
+          console.log('[HOME] API error:', apiError?.message, '- keeping current data');
+          // Keep showing current data, don't clear it
         }
       } else {
+        // Step 1: Show cached or mock TV shows IMMEDIATELY (never empty)
+        if (!isRefresh) {
+          const { data: cachedTvShows, isStale } = await trendingTvShowsCache.get();
+          if (!isSessionValid()) return;
+          if (cachedTvShows && cachedTvShows.length > 0) {
+            console.log('[HOME] Showing cached TV shows:', cachedTvShows.length);
+            setTvShows(cachedTvShows);
+            if (!isStale) {
+              setRefreshing(false);
+              return;
+            }
+          } else {
+            // Show mock data immediately while fetching
+            console.log('[HOME] No cache, showing mock TV shows while fetching');
+            setTvShows(TRENDING_TVSHOWS);
+          }
+        }
+
+        // Step 2: Always try to fetch fresh data from API (trending is public)
         try {
-          // Fetch trending TV shows from TMDB
+          console.log('[HOME] Fetching trending TV shows from API...');
           const response = await tvShowsApi.getTrending('day');
-          setTvShows(response || []);
-          setUseLocalData(false);
-        } catch (apiError) {
-          console.log('API unavailable, using mock data');
-          setTvShows(TRENDING_TVSHOWS);
-          setUseLocalData(true);
+          
+          if (!isSessionValid()) return;
+          
+          if (response && response.length > 0) {
+            console.log('[HOME] Got TV shows from API:', response.length);
+            setTvShows(response);
+            trendingTvShowsCache.set(response).catch(() => {});
+          }
+          // If API returns empty, keep showing current data (mock or cached)
+        } catch (apiError: any) {
+          console.log('[HOME] API error:', apiError?.message, '- keeping current data');
+          // Keep showing current data, don't clear it
         }
       }
     } catch (err: any) {
-      console.error('Error loading data:', err);
-      setError('Failed to load trending content');
-      if (activeTab === 'movies') {
-        setMovies(TRENDING_MOVIES);
-      } else {
-        setTvShows(TRENDING_TVSHOWS);
-      }
-      setUseLocalData(true);
+      console.error('[HOME] Error loading data:', err);
+      // Don't set error - just keep showing current data
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (isSessionValid()) {
+        setRefreshing(false);
+        setDataLoading(false);
+      }
     }
   }, [activeTab]);
 
+  // Load trending data on mount
   useEffect(() => {
-    loadData();
-  }, [activeTab]);
+    isMounted.current = true;
+    
+    // Show shell immediately
+    setIsReady(true);
+    
+    // Load trending movies
+    console.log('[HOME] Loading trending movies...');
+    
+    if (!hasLoadedMovies.current) {
+      hasLoadedMovies.current = true;
+      // Double requestAnimationFrame GUARANTEES a paint has occurred
+      // First rAF: Browser commits the frame with loading screen
+      // Second rAF: Now we can safely load data
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (isMounted.current) loadData(false, 'movies');
+        });
+      });
+    } else {
+      // Already loaded, hide loading banner immediately
+      setDataLoading(false);
+    }
+    
+    return () => {
+      loadSessionRef.current++;
+      isMounted.current = false;
+    };
+  }, [loadData]);
+  
+  // Load TV shows when tab switches
+  useEffect(() => {
+    if (activeTab === 'tvshows') {
+      if (!hasLoadedTvShows.current) {
+        hasLoadedTvShows.current = true;
+        setDataLoading(true); // Show loading for TV shows
+        loadData(false, 'tvshows');
+      } else {
+        // Already loaded, hide loading banner
+        setDataLoading(false);
+      }
+    } else if (activeTab === 'movies') {
+      // Switching back to movies, hide loading if already loaded
+      if (hasLoadedMovies.current) {
+        setDataLoading(false);
+      }
+    }
+  }, [activeTab, loadData]);
+  
+  // Handle focus changes
+  useFocusEffect(
+    useCallback(() => {
+      isMounted.current = true;
+      return () => {
+        loadSessionRef.current++;
+        isMounted.current = false;
+      };
+    }, [])
+  );
+  
+  // Load when switching tabs within this screen
+  const handleTabChange = (tab: ContentType) => {
+    setActiveTab(tab);
+    if (tab === 'movies' && !hasLoadedMovies.current) {
+      hasLoadedMovies.current = true;
+      loadData(false, 'movies');
+    } else if (tab === 'tvshows' && !hasLoadedTvShows.current) {
+      hasLoadedTvShows.current = true;
+      loadData(false, 'tvshows');
+    }
+  };
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -164,6 +294,15 @@ export default function HomeScreen() {
     />
   );
 
+  // Show full-screen loading while data is loading
+  if (dataLoading) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <LoadingSpinner message={`Loading trending ${activeTab}...`} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
@@ -171,7 +310,7 @@ export default function HomeScreen() {
         <View style={styles.titleRow}>
           <Flame color={Colors.warning} size={28} />
           <Text style={styles.title}>Trending</Text>
-          {(useLocalData || isUsingDemoMode) && (
+          {isUsingDemoMode && (
             <View style={styles.demoBadge}>
               <Text style={styles.demoText}>DEMO</Text>
             </View>
@@ -187,7 +326,8 @@ export default function HomeScreen() {
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'movies' && styles.activeTab]}
-          onPress={() => setActiveTab('movies')}
+          onPress={() => handleTabChange('movies')}
+          activeOpacity={0.7}
         >
           <Film color={activeTab === 'movies' ? Colors.background : Colors.textSecondary} size={18} />
           <Text style={[styles.tabText, activeTab === 'movies' && styles.activeTabText]}>
@@ -196,7 +336,8 @@ export default function HomeScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'tvshows' && styles.activeTab]}
-          onPress={() => setActiveTab('tvshows')}
+          onPress={() => handleTabChange('tvshows')}
+          activeOpacity={0.7}
         >
           <Tv color={activeTab === 'tvshows' ? Colors.background : Colors.textSecondary} size={18} />
           <Text style={[styles.tabText, activeTab === 'tvshows' && styles.activeTabText]}>
@@ -216,7 +357,7 @@ export default function HomeScreen() {
       )}
 
       {/* Content */}
-      {loading ? (
+      {data.length === 0 && !isReady ? (
         <LoadingSpinner message={`Loading trending ${activeTab === 'movies' ? 'movies' : 'TV shows'}...`} />
       ) : data.length === 0 ? (
         <EmptyState

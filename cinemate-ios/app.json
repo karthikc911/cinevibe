@@ -15,13 +15,22 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cinevibe.app",
+      "bundleIdentifier": "com.cinevibe.movieapp",
+      "buildNumber": "31",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["cinevibe"]
+            "CFBundleURLSchemes": [
+              "cinevibe"
+            ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "cinevibe"
+            ]
           }
-        ]
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -29,7 +38,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f0f1a"
       },
-      "package": "com.cinevibe.app"
+      "package": "com.cinevibe.movieapp"
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -38,16 +47,17 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-web-browser",
-      "expo-crypto"
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "9d8fac7f-3513-41b6-bc54-3c8f0b0efb7f"
       }
-    }
+    },
+    "owner": "karthik911"
   }
 }

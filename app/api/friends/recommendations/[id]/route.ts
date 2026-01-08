@@ -3,14 +3,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { getCurrentUser } from "@/lib/mobile-auth";
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Support both web session and mobile token authentication
     const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization");
+    const user = await getCurrentUser(session, authHeader);
+    
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -30,7 +35,7 @@ export async function DELETE(
     }
 
     // Only the receiver can delete the recommendation
-    if (recommendation.receiver.email !== session.user.email) {
+    if (recommendation.receiver.email !== user.email) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -43,7 +48,7 @@ export async function DELETE(
     logger.info("FRIENDS_RECOMMENDATIONS", "Recommendation acknowledged", {
       recommendationId,
       movieId: recommendation.movieId,
-      userEmail: session.user.email,
+      userEmail: user.email,
     });
 
     return NextResponse.json({ message: "Recommendation acknowledged successfully" });

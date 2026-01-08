@@ -6,6 +6,12 @@ CineVibe is a personalized movie recommendation platform that uses AI to help yo
 
 ![CineVibe](https://img.shields.io/badge/Next.js-14-black) ![React Native](https://img.shields.io/badge/Expo-React%20Native-blue) ![PostgreSQL](https://img.shields.io/badge/Database-PostgreSQL-green) ![AI](https://img.shields.io/badge/AI-Perplexity-purple)
 
+## 🌐 Live Deployments
+
+- **Website**: [https://cinevibe-six.vercel.app](https://cinevibe-six.vercel.app)
+- **iOS App (TestFlight)**: [https://appstoreconnect.apple.com/apps/6757141769/testflight/ios](https://appstoreconnect.apple.com/apps/6757141769/testflight/ios)
+- **App Store Connect**: App ID `6757141769`
+
 ---
 
 ## 🌟 Features

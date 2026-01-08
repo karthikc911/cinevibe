@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ScrollView,
   Dimensions,
   Linking,
+  Pressable,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,14 +80,37 @@ export function MovieDetailModal({
     Linking.openURL(`https://www.google.com/search?q=${query}`);
   };
 
+  // Close immediately on touch start (not waiting for release)
+  const handleCloseStart = useCallback(() => {
+    // Fire immediately on touch start for instant response
+    onClose();
+  }, [onClose]);
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal 
+      visible={visible} 
+      animationType="slide" 
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
       <View style={styles.container}>
-        {/* Header with Close Button */}
+        {/* Swipe indicator at top */}
+        <View style={styles.swipeIndicatorContainer}>
+          <View style={styles.swipeIndicator} />
+        </View>
+        
+        {/* Header with Close Button (optional - swipe down works too) */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+          <Pressable 
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.closeButtonPressed
+            ]} 
+            onPressIn={handleCloseStart}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          >
             <X color={Colors.text} size={24} />
-          </TouchableOpacity>
+          </Pressable>
           <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
           <View style={styles.headerSpacer} />
         </View>
@@ -231,21 +255,36 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  swipeIndicatorContainer: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    alignItems: 'center',
+  },
+  swipeIndicator: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.border,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
   closeButton: {
-    width: 40,
-    height: 40,
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 20,
+    borderRadius: 18,
+  },
+  closeButtonPressed: {
+    backgroundColor: Colors.border,
+    opacity: 0.8,
   },
   headerTitle: {
     flex: 1,

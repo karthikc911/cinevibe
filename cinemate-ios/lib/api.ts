@@ -5,71 +5,94 @@ import { Movie, TvShow, Rating, WatchlistItem, TvShowWatchlistItem, RatingType }
 // ============================================
 // IMPORTANT: Update this to your backend URL
 // ============================================
-// For local development (same machine):
-// const API_BASE = 'http://localhost:3000/api';
-
-// For local development (from phone on same network):
-// const API_BASE = 'http://YOUR_MAC_IP:3000/api';
-// const API_BASE = 'http://10.0.0.17:3000/api';
-
 // For production (Vercel deployment):
 const API_BASE = 'https://cinevibe-six.vercel.app/api';
 
+// ============================================
+// IN-MEMORY TOKEN CACHE - Critical for performance!
+// SecureStore is slow on iOS, so we cache tokens in memory
+// ============================================
+let cachedAuthToken: string | null = null;
+let cachedSessionCookie: string | null = null;
+let tokenCacheInitialized = false;
+
+// Initialize token cache from SecureStore (call once at app start)
+export const initializeTokenCache = async () => {
+  if (tokenCacheInitialized) return;
+  try {
+    cachedAuthToken = await SecureStore.getItemAsync('authToken');
+    cachedSessionCookie = await SecureStore.getItemAsync('sessionCookie');
+    tokenCacheInitialized = true;
+    console.log('[API] Token cache initialized');
+  } catch (error) {
+    console.log('[API] Error initializing token cache:', error);
+  }
+};
+
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 30000,
+  timeout: 15000, // Reduced from 30s to 15s for faster failure
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Add auth token to requests
-api.interceptors.request.use(async (config) => {
-  try {
-    const token = await SecureStore.getItemAsync('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    // Add session cookie if available
-    const sessionCookie = await SecureStore.getItemAsync('sessionCookie');
-    if (sessionCookie) {
-      config.headers.Cookie = sessionCookie;
-    }
-  } catch (error) {
-    console.log('Error getting auth token:', error);
-  }
-  return config;
+// Create a separate instance for AI endpoints with longer timeout
+const aiApi = axios.create({
+  baseURL: API_BASE,
+  timeout: 60000, // 60 seconds for AI-powered endpoints (Perplexity, enrichment, etc.)
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
 
-// Response interceptor for error handling
-// Note: Network errors are expected when backend is unavailable (demo mode)
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Only log non-network errors (network errors are expected in demo mode)
-    if (error.message !== 'Network Error') {
-      console.log('API Error:', error.response?.data || error.message);
-    }
-    return Promise.reject(error);
+// Add auth token to requests - NOW USES MEMORY CACHE (FAST!)
+const addAuthToRequest = (config: any) => {
+  // Use cached tokens - NO async SecureStore calls!
+  if (cachedAuthToken) {
+    config.headers.Authorization = `Bearer ${cachedAuthToken}`;
   }
-);
+  if (cachedSessionCookie) {
+    config.headers.Cookie = cachedSessionCookie;
+  }
+  return config;
+};
 
-// Auth functions
+api.interceptors.request.use(addAuthToRequest);
+aiApi.interceptors.request.use(addAuthToRequest);
+
+// Response interceptor for error handling
+const handleErrorResponse = (error: any) => {
+  // Only log non-network errors
+  if (error.message !== 'Network Error') {
+    console.log('API Error:', error.response?.data || error.message);
+  }
+  return Promise.reject(error);
+};
+
+api.interceptors.response.use((response) => response, handleErrorResponse);
+aiApi.interceptors.response.use((response) => response, handleErrorResponse);
+
+// Auth functions - update both SecureStore AND memory cache
 export const authApi = {
   async setToken(token: string) {
-    await SecureStore.setItemAsync('authToken', token);
+    cachedAuthToken = token; // Update memory cache FIRST (instant)
+    await SecureStore.setItemAsync('authToken', token); // Then persist
   },
   
-  async getToken() {
-    return await SecureStore.getItemAsync('authToken');
+  getToken() {
+    return cachedAuthToken; // Return from memory (instant)
   },
   
   async clearToken() {
+    cachedAuthToken = null; // Clear memory cache FIRST
+    cachedSessionCookie = null;
     await SecureStore.deleteItemAsync('authToken');
     await SecureStore.deleteItemAsync('sessionCookie');
   },
 
   async setSessionCookie(cookie: string) {
+    cachedSessionCookie = cookie; // Update memory cache FIRST
     await SecureStore.setItemAsync('sessionCookie', cookie);
   },
 };
@@ -80,7 +103,7 @@ export const authApi = {
 export const moviesApi = {
   // AI-powered smart picks (uses Perplexity AI) - POST method
   async getSmartPicks(): Promise<{ movies: Movie[], aiSteps?: any[] }> {
-    const response = await api.post('/search/smart-picks', {});
+    const response = await aiApi.post('/search/smart-picks', {}); // Use aiApi for longer timeout
     return response.data;
   },
 
@@ -94,7 +117,7 @@ export const moviesApi = {
   async searchMovies(query: string): Promise<Movie[]> {
     try {
       // Use Perplexity search like the website does
-      const response = await api.post('/search/perplexity', { query });
+      const response = await aiApi.post('/search/perplexity', { query }); // Use aiApi for AI-powered search
       return response.data.movies || [];
     } catch (error) {
       console.log('Perplexity search failed, falling back to basic search');
@@ -135,7 +158,7 @@ export const moviesApi = {
 export const tvShowsApi = {
   // AI-powered smart picks (uses Perplexity AI) - POST method
   async getSmartPicks(): Promise<{ tvShows: TvShow[], aiSteps?: any[] }> {
-    const response = await api.post('/search/smart-picks-tvshows', {});
+    const response = await aiApi.post('/search/smart-picks-tvshows', {}); // Use aiApi for longer timeout
     return response.data;
   },
 
@@ -155,7 +178,7 @@ export const tvShowsApi = {
   async searchTvShows(query: string): Promise<TvShow[]> {
     try {
       // Use Perplexity search like the website does
-      const response = await api.post('/search/perplexity', { query });
+      const response = await aiApi.post('/search/perplexity', { query }); // Use aiApi for AI-powered search
       return response.data.tvShows || [];
     } catch (error) {
       console.log('Perplexity search failed for TV shows, falling back to basic search');

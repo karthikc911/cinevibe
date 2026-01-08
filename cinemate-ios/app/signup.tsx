@@ -19,7 +19,8 @@ import { Colors } from '../lib/constants';
 import { useAppStore } from '../lib/store';
 import { DEMO_USER } from '../lib/mockData';
 
-const BACKEND_URL = 'http://10.0.0.17:3000';
+// Production backend URL
+const BACKEND_URL = 'https://cinevibe-six.vercel.app';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -82,9 +83,9 @@ export default function SignupScreen() {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Use Demo',
-            onPress: () => {
-              login(DEMO_USER);
-              setIsUsingDemoMode(true);
+            onPress: async () => {
+              await login(DEMO_USER);
+              await setIsUsingDemoMode(true);
               router.replace('/(tabs)');
             },
           },

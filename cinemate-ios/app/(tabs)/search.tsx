@@ -15,10 +15,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Search as SearchIcon, X, Film, Tv, Sparkles, RefreshCw, Heart, Share2, ThumbsDown, EyeOff, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Search as SearchIcon, X, Film, Tv, Sparkles, RefreshCw, Heart, Share2, ThumbsDown, EyeOff, ChevronLeft, ChevronRight, LogIn } from 'lucide-react-native';
 import { MovieCard } from '../../components/MovieCard';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { EmptyState } from '../../components/EmptyState';
+import { LoadingBanner } from '../../components/LoadingBanner';
 import { moviesApi, tvShowsApi, ratingsApi, watchlistApi } from '../../lib/api';
 import { Colors, TMDB_IMAGE_BASE, LanguageNames } from '../../lib/constants';
 import { Movie, TvShow, RatingType } from '../../lib/types';
@@ -37,7 +39,25 @@ interface AIStep {
   status: 'pending' | 'loading' | 'completed' | 'error';
 }
 
+// Memoized login prompt
+const LoginPrompt = React.memo(({ onPress }: { onPress: () => void }) => (
+  <View style={styles.loginPrompt}>
+    <LogIn color={Colors.primary} size={64} />
+    <Text style={styles.loginTitle}>Sign In Required</Text>
+    <Text style={styles.loginSubtitle}>
+      Please sign in to search for movies and get AI recommendations
+    </Text>
+    <TouchableOpacity style={styles.loginButton} onPress={onPress}>
+      <Text style={styles.loginButtonText}>Sign In</Text>
+    </TouchableOpacity>
+  </View>
+));
+
 export default function SearchScreen() {
+  const router = useRouter();
+  const { isAuthenticated, isSessionRestored, isUsingDemoMode, addToMovieWatchlist, addToTvShowWatchlist } = useAppStore();
+  
+  // State
   const [query, setQuery] = useState('');
   const [searchType, setSearchType] = useState<SearchType>('movies');
   const [viewMode, setViewMode] = useState<ViewMode>('search');
@@ -48,8 +68,6 @@ export default function SearchScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aiSteps, setAiSteps] = useState<AIStep[]>([]);
-
-  const { isUsingDemoMode, addToMovieWatchlist, addToTvShowWatchlist } = useAppStore();
 
   const updateStep = (stepId: string, updates: Partial<AIStep>) => {
     setAiSteps(prev => prev.map(step => 
@@ -548,8 +566,17 @@ export default function SearchScreen() {
     />
   );
 
+  // ALWAYS render shell immediately!
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Loading banner at top */}
+      <LoadingBanner visible={loading} message="Searching..." />
+      
+      {/* Show login prompt if not authenticated */}
+      {isSessionRestored && !isAuthenticated ? (
+        <LoginPrompt onPress={() => router.push('/login')} />
+      ) : (
+        <>
       {/* Header - Only show when not in AI mode */}
       {viewMode === 'search' && (
         <>
@@ -660,6 +687,8 @@ export default function SearchScreen() {
       ) : viewMode !== 'search' ? (
         renderSwipeableCard()
       ) : null}
+        </>
+      )}
     </SafeAreaView>
   );
 }
@@ -668,6 +697,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  loginPrompt: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  loginTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: 16,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  loginButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 48,
+    paddingVertical: 16,
+    borderRadius: 12,
+  },
+  loginButtonText: {
+    color: Colors.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: Colors.textSecondary,
+    fontSize: 16,
+    marginTop: 12,
   },
   header: {
     paddingHorizontal: 16,
@@ -790,12 +859,6 @@ const styles = StyleSheet.create({
   },
   searchResultsList: {
     paddingBottom: 100,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
   },
   aiProgressContainer: {
     backgroundColor: Colors.surface,

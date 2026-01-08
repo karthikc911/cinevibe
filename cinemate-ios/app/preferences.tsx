@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   TextInput,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,8 @@ import { ArrowLeft, Check, Globe, Film, Save, Star, Calendar, DollarSign, Messag
 import { Colors } from '../lib/constants';
 import { useAppStore } from '../lib/store';
 import { userApi } from '../lib/api';
+import { userPreferencesCache } from '../lib/cache';
+import { LoadingBanner } from '../components/LoadingBanner';
 
 // Use SAME language values as website (full names, not codes)
 const LANGUAGES = [
@@ -71,43 +74,62 @@ export default function PreferencesScreen() {
   const [recMinImdb, setRecMinImdb] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    loadPreferences();
+    isMounted.current = true;
+    
+    // Wait for navigation animation to complete before loading
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (isMounted.current) {
+        loadPreferences();
+      }
+    });
+    
+    return () => {
+      task.cancel();
+      isMounted.current = false;
+    };
   }, []);
 
   const loadPreferences = async () => {
+    // Step 1: Show cached preferences IMMEDIATELY
+    const { data: cachedPrefs, isStale } = await userPreferencesCache.get();
+    if (!isMounted.current) return;
+    
+    if (cachedPrefs) {
+      console.log('[PREFERENCES] Loaded from cache');
+      applyPreferences(cachedPrefs);
+      setLoading(false);
+      if (!isStale && !isUsingDemoMode) {
+        // Cache is fresh, no need to refetch
+        return;
+      }
+    }
+
+    // Step 2: Fetch fresh data in background
     try {
       if (!isUsingDemoMode) {
         console.log('[PREFERENCES] Loading from API...');
         const prefs = await userApi.getPreferences();
+        if (!isMounted.current) return;
+        
         console.log('[PREFERENCES] Loaded:', prefs);
         
-        if (prefs.languages && Array.isArray(prefs.languages)) {
-          setSelectedLanguages(prefs.languages);
-        }
-        if (prefs.genres && Array.isArray(prefs.genres)) {
-          setSelectedGenres(prefs.genres);
-        }
-        if (prefs.aiInstructions) {
-          setAiInstructions(prefs.aiInstructions);
-        }
-        if (prefs.recYearFrom !== null && prefs.recYearFrom !== undefined) {
-          setRecYearFrom(prefs.recYearFrom);
-        }
-        if (prefs.recYearTo !== null && prefs.recYearTo !== undefined) {
-          setRecYearTo(prefs.recYearTo);
-        }
-        if (prefs.recMinImdb !== null && prefs.recMinImdb !== undefined) {
-          setRecMinImdb(prefs.recMinImdb);
-        }
+        applyPreferences(prefs);
+        // Cache the preferences (fire and forget)
+        userPreferencesCache.set(prefs);
       } else {
         // Demo defaults
-        setSelectedLanguages(['English', 'Hindi']);
-        setSelectedGenres(['Action', 'Drama', 'Thriller']);
+        if (isMounted.current) {
+          setSelectedLanguages(['English', 'Hindi']);
+          setSelectedGenres(['Action', 'Drama', 'Thriller']);
+        }
       }
     } catch (error) {
       console.error('[PREFERENCES] Error loading preferences:', error);
+      if (!isMounted.current) return;
+      
       // Use user object from store as fallback
       if (user?.languages && Array.isArray(user.languages)) {
         setSelectedLanguages(user.languages);
@@ -116,7 +138,30 @@ export default function PreferencesScreen() {
         setSelectedGenres(user.genres);
       }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const applyPreferences = (prefs: any) => {
+    if (prefs.languages && Array.isArray(prefs.languages)) {
+      setSelectedLanguages(prefs.languages);
+    }
+    if (prefs.genres && Array.isArray(prefs.genres)) {
+      setSelectedGenres(prefs.genres);
+    }
+    if (prefs.aiInstructions) {
+      setAiInstructions(prefs.aiInstructions);
+    }
+    if (prefs.recYearFrom !== null && prefs.recYearFrom !== undefined) {
+      setRecYearFrom(prefs.recYearFrom);
+    }
+    if (prefs.recYearTo !== null && prefs.recYearTo !== undefined) {
+      setRecYearTo(prefs.recYearTo);
+    }
+    if (prefs.recMinImdb !== null && prefs.recMinImdb !== undefined) {
+      setRecMinImdb(prefs.recMinImdb);
     }
   };
 
@@ -144,15 +189,17 @@ export default function PreferencesScreen() {
 
     setSaving(true);
     try {
+      const prefsData = {
+        languages: selectedLanguages, 
+        genres: selectedGenres,
+        aiInstructions,
+        recYearFrom,
+        recYearTo,
+        recMinImdb
+      };
+
       if (!isUsingDemoMode) {
-        console.log('[PREFERENCES] Saving:', { 
-          selectedLanguages, 
-          selectedGenres, 
-          aiInstructions,
-          recYearFrom,
-          recYearTo,
-          recMinImdb
-        });
+        console.log('[PREFERENCES] Saving:', prefsData);
         
         await userApi.updatePreferences(
           selectedLanguages, 
@@ -162,6 +209,9 @@ export default function PreferencesScreen() {
           recYearTo,
           recMinImdb
         );
+        
+        // Update cache with new preferences
+        await userPreferencesCache.set(prefsData);
         
         // Update local user object in store
         if (user) {
@@ -183,22 +233,22 @@ export default function PreferencesScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
-          <Text style={styles.loadingText}>Loading preferences...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  // NEVER block navigation - show page immediately with loading indicator if needed
+  // The page structure always shows, only content area shows loading
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Loading banner at top */}
+      <LoadingBanner visible={loading} message="Loading preferences..." />
+      
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+          activeOpacity={0.6}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ArrowLeft color={Colors.text} size={24} />
         </TouchableOpacity>
         <Text style={styles.title}>Preferences</Text>
@@ -226,6 +276,14 @@ export default function PreferencesScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
+        {/* Loading indicator at top if still loading */}
+        {loading && (
+          <View style={styles.inlineLoadingContainer}>
+            <ActivityIndicator size="small" color={Colors.primary} />
+            <Text style={styles.inlineLoadingText}>Loading your preferences...</Text>
+          </View>
+        )}
+
         {/* Languages Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -428,6 +486,21 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 12,
     fontSize: 14,
+  },
+  inlineLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 8,
+    gap: 10,
+  },
+  inlineLoadingText: {
+    color: Colors.primary,
+    fontSize: 13,
   },
   header: {
     flexDirection: 'row',

@@ -1,15 +1,25 @@
 import { create } from 'zustand';
+import * as SecureStore from 'expo-secure-store';
 import { Movie, TvShow, Rating, WatchlistItem, User, RatingType } from './types';
+
+// Session storage keys
+const SESSION_KEYS = {
+  USER: 'session_user',
+  IS_DEMO: 'session_is_demo',
+} as const;
 
 interface AppState {
   // User
   user: User | null;
   isAuthenticated: boolean;
   isUsingDemoMode: boolean;
+  isSessionRestored: boolean;
   setUser: (user: User | null) => void;
   login: (user: User) => void;
   logout: () => void;
   setIsUsingDemoMode: (isDemoMode: boolean) => void;
+  restoreSession: () => Promise<boolean>;
+  persistSession: () => Promise<void>;
   
   // Movies
   smartPicks: Movie[];
@@ -51,15 +61,100 @@ interface AppState {
   clearAll: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   // User
   user: null,
   isAuthenticated: false,
   isUsingDemoMode: false,
+  isSessionRestored: false,
+  
   setUser: (user) => set({ user, isAuthenticated: !!user }),
-  login: (user) => set({ user, isAuthenticated: true }),
-  logout: () => set({ user: null, isAuthenticated: false, isUsingDemoMode: false }),
-  setIsUsingDemoMode: (isDemoMode) => set({ isUsingDemoMode: isDemoMode }),
+  
+  login: async (user) => {
+    set({ user, isAuthenticated: true });
+    // Persist session to SecureStore
+    try {
+      await SecureStore.setItemAsync(SESSION_KEYS.USER, JSON.stringify(user));
+      console.log('[SESSION] User session persisted');
+    } catch (error) {
+      console.log('[SESSION] Error persisting user session:', error);
+    }
+  },
+  
+  logout: async () => {
+    set({ user: null, isAuthenticated: false, isUsingDemoMode: false });
+    // Clear persisted session
+    try {
+      await SecureStore.deleteItemAsync(SESSION_KEYS.USER);
+      await SecureStore.deleteItemAsync(SESSION_KEYS.IS_DEMO);
+      await SecureStore.deleteItemAsync('authToken');
+      await SecureStore.deleteItemAsync('sessionCookie');
+      console.log('[SESSION] Session cleared');
+    } catch (error) {
+      console.log('[SESSION] Error clearing session:', error);
+    }
+  },
+  
+  setIsUsingDemoMode: async (isDemoMode) => {
+    set({ isUsingDemoMode: isDemoMode });
+    // Persist demo mode preference
+    try {
+      await SecureStore.setItemAsync(SESSION_KEYS.IS_DEMO, JSON.stringify(isDemoMode));
+    } catch (error) {
+      console.log('[SESSION] Error persisting demo mode:', error);
+    }
+  },
+
+  // Restore session from SecureStore on app launch
+  restoreSession: async () => {
+    try {
+      console.log('[SESSION] Attempting to restore session...');
+      
+      // Check for persisted user
+      const userJson = await SecureStore.getItemAsync(SESSION_KEYS.USER);
+      const isDemoJson = await SecureStore.getItemAsync(SESSION_KEYS.IS_DEMO);
+      const authToken = await SecureStore.getItemAsync('authToken');
+      
+      if (userJson) {
+        const user = JSON.parse(userJson);
+        const isDemo = isDemoJson ? JSON.parse(isDemoJson) : false;
+        
+        console.log('[SESSION] Found persisted session for:', user.email);
+        console.log('[SESSION] Is demo mode:', isDemo);
+        console.log('[SESSION] Has auth token:', !!authToken);
+        
+        set({ 
+          user, 
+          isAuthenticated: true, 
+          isUsingDemoMode: isDemo,
+          isSessionRestored: true 
+        });
+        return true;
+      } else {
+        console.log('[SESSION] No persisted session found');
+        set({ isSessionRestored: true });
+        return false;
+      }
+    } catch (error) {
+      console.log('[SESSION] Error restoring session:', error);
+      set({ isSessionRestored: true });
+      return false;
+    }
+  },
+
+  // Manually persist current session
+  persistSession: async () => {
+    const { user, isUsingDemoMode } = get();
+    if (user) {
+      try {
+        await SecureStore.setItemAsync(SESSION_KEYS.USER, JSON.stringify(user));
+        await SecureStore.setItemAsync(SESSION_KEYS.IS_DEMO, JSON.stringify(isUsingDemoMode));
+        console.log('[SESSION] Session manually persisted');
+      } catch (error) {
+        console.log('[SESSION] Error manually persisting session:', error);
+      }
+    }
+  },
   
   // Movies
   smartPicks: [],
@@ -118,8 +213,18 @@ export const useAppStore = create<AppState>((set) => ({
       currentRateIndex: state.currentRateIndex + 1,
     })),
   
-  // Clear
-  clearAll: () =>
+  // Clear all data (but session is cleared separately in logout)
+  clearAll: async () => {
+    // Clear persisted session
+    try {
+      await SecureStore.deleteItemAsync(SESSION_KEYS.USER);
+      await SecureStore.deleteItemAsync(SESSION_KEYS.IS_DEMO);
+      await SecureStore.deleteItemAsync('authToken');
+      await SecureStore.deleteItemAsync('sessionCookie');
+    } catch (error) {
+      console.log('[SESSION] Error clearing session in clearAll:', error);
+    }
+    
     set({
       user: null,
       isAuthenticated: false,
@@ -132,6 +237,7 @@ export const useAppStore = create<AppState>((set) => ({
       tvShowWatchlist: [],
       rateMovies: [],
       currentRateIndex: 0,
-    }),
+    });
+  },
 }));
 
