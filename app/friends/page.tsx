@@ -487,10 +487,10 @@ export default function FriendsPage() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
               Friends & Recommendations
             </h1>
-            <p className="text-gray-400">
+            <p className="text-sm sm:text-base text-gray-400">
               Discover movies your friends think you'll love
             </p>
           </div>
@@ -562,38 +562,40 @@ export default function FriendsPage() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-white/10">
+      <div className="flex gap-1 sm:gap-2 border-b border-white/10 overflow-x-auto pb-1 scrollbar-hide">
         <button
           onClick={() => setActiveTab("recommendations")}
-          className={`px-4 py-2 font-semibold transition-all ${
+          className={`px-2 sm:px-4 py-2 font-semibold transition-all whitespace-nowrap text-xs sm:text-sm min-h-[44px] ${
             activeTab === "recommendations"
               ? "text-cyan-400 border-b-2 border-cyan-400"
               : "text-gray-400 hover:text-white"
           }`}
         >
-          <Sparkles className="inline w-4 h-4 mr-2" />
-          Recommendations ({receivedRecommendations.filter(r => !r.seen).length} new)
+          <Sparkles className="inline w-4 h-4 mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">Recommendations</span>
+          <span className="sm:hidden">Recs</span>
+          <span className="ml-1">({receivedRecommendations.filter(r => !r.seen).length})</span>
         </button>
         <button
           onClick={() => setActiveTab("friends")}
-          className={`px-4 py-2 font-semibold transition-all ${
+          className={`px-2 sm:px-4 py-2 font-semibold transition-all whitespace-nowrap text-xs sm:text-sm min-h-[44px] ${
             activeTab === "friends"
               ? "text-cyan-400 border-b-2 border-cyan-400"
               : "text-gray-400 hover:text-white"
           }`}
         >
-          <Users className="inline w-4 h-4 mr-2" />
+          <Users className="inline w-4 h-4 mr-1 sm:mr-2" />
           Friends ({friends.length})
         </button>
         <button
           onClick={() => setActiveTab("requests")}
-          className={`px-4 py-2 font-semibold transition-all ${
+          className={`px-2 sm:px-4 py-2 font-semibold transition-all whitespace-nowrap text-xs sm:text-sm min-h-[44px] ${
             activeTab === "requests"
               ? "text-cyan-400 border-b-2 border-cyan-400"
               : "text-gray-400 hover:text-white"
           }`}
         >
-          <Mail className="inline w-4 h-4 mr-2" />
+          <Mail className="inline w-4 h-4 mr-1 sm:mr-2" />
           Requests ({receivedRequests.length})
         </button>
       </div>
@@ -632,7 +634,7 @@ export default function FriendsPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   {receivedRecommendations.map((rec, idx) => {
                     const movie = recommendedMovies.find(m => m.id === rec.movieId);
                     
@@ -746,7 +748,7 @@ export default function FriendsPage() {
                   <Send className="w-6 h-6 text-cyan-400" />
                   Your Recommendations
                 </h2>
-                <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {sentRecommendations.map((rec) => (
                     <Card key={rec.id} className="bg-white/5 backdrop-blur-sm border-white/10">
                       <CardContent className="pt-6">
@@ -799,7 +801,7 @@ export default function FriendsPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid lg:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 {friends.map((friend, idx) => (
                   <motion.div
                     key={friend.id}

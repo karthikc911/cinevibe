@@ -73,13 +73,9 @@ function DiscoverContent() {
     }
   }, [status]);
 
-  // Auto-generate AI recommendations on load (6 movies)
-  useEffect(() => {
-    if (status === "authenticated" && !searchQuery && !aiInitialized) {
-      setAiInitialized(true);
-      loadInitialAIRecommendations();
-    }
-  }, [status, searchQuery, aiInitialized]);
+  // AI recommendations are now loaded on-demand via button click
+  // This matches the home page behavior where users explicitly request AI picks
+  // Removing auto-load to prevent unnecessary API calls and improve page load
 
   // Lazy load trending movies when they come into view
   useEffect(() => {
@@ -362,24 +358,24 @@ function DiscoverContent() {
         <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} />
 
         {/* Header with CTA */}
-        <div className="space-y-4 text-center">
-          <h1 className="text-5xl font-bold text-white flex items-center justify-center gap-3">
-            <span className="text-4xl">🎬</span>
+        <div className="space-y-4 text-center px-2">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white flex items-center justify-center gap-2 sm:gap-3">
+            <span className="text-2xl sm:text-4xl">🎬</span>
             <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
               Discover & Rate Movies
             </span>
           </h1>
-          <p className="text-xl text-gray-400">
+          <p className="text-base sm:text-lg lg:text-xl text-gray-400">
             Personalized recommendations powered by AI
           </p>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <Link href="/login">
-              <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold px-8 py-6 text-lg">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link href="/login" className="w-full sm:w-auto">
+              <Button className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg min-h-[48px]">
                 Log In
               </Button>
             </Link>
-            <Link href="/signup">
-              <Button variant="outline" className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 font-semibold px-8 py-6 text-lg">
+            <Link href="/signup" className="w-full sm:w-auto">
+              <Button variant="outline" className="w-full sm:w-auto border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 font-semibold px-6 sm:px-8 py-4 sm:py-6 text-base sm:text-lg min-h-[48px]">
                 Sign Up
               </Button>
             </Link>
@@ -413,20 +409,20 @@ function DiscoverContent() {
                 </div>
               </div>
 
-              <div className="relative px-12">
-                {/* Left Arrow */}
+              <div className="relative px-0 sm:px-8 lg:px-12">
+                {/* Left Arrow - Hidden on mobile */}
                 {previewIndex > 0 && (
                   <button
                     onClick={handlePreviewPrev}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Previous movies"
                   >
-                    <ChevronLeft className="w-6 h-6" />
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
                 {/* Movies Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
                   <AnimatePresence mode="wait">
                     {previewMovies.slice(previewIndex, previewIndex + 4).map((movie, idx) => (
                       <motion.div
@@ -452,39 +448,59 @@ function DiscoverContent() {
                   </AnimatePresence>
                 </div>
 
-                {/* Right Arrow */}
+                {/* Right Arrow - Hidden on mobile */}
                 {previewIndex + 4 < previewMovies.length && (
                   <button
                     onClick={handlePreviewNext}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Next movies"
                   >
-                    <ChevronRight className="w-6 h-6" />
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
-                {/* Debug Info */}
-                <div className="text-center mt-4 text-sm text-gray-400">
+                {/* Mobile Pagination Controls */}
+                <div className="flex sm:hidden justify-center gap-4 mt-4">
+                  <button
+                    onClick={handlePreviewPrev}
+                    disabled={previewIndex === 0}
+                    className="p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Previous movies"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handlePreviewNext}
+                    disabled={previewIndex + 4 >= previewMovies.length}
+                    className="p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Next movies"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Page Info */}
+                <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
                   Showing {previewIndex + 1}-{Math.min(previewIndex + 4, previewMovies.length)} of {previewMovies.length} movies
                 </div>
               </div>
 
               {/* Bottom CTA */}
-              <div className="mt-8 p-6 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/30 rounded-xl text-center">
-                <h3 className="text-xl font-bold text-white mb-2">
+              <div className="mt-8 p-4 sm:p-6 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-400/30 rounded-xl text-center">
+                <h3 className="text-lg sm:text-xl font-bold text-white mb-2">
                   Want to see your personalized recommendations?
                 </h3>
-                <p className="text-gray-400 mb-4">
+                <p className="text-sm sm:text-base text-gray-400 mb-4">
                   Sign up now to rate movies and get AI-powered suggestions just for you
                 </p>
-                <div className="flex items-center justify-center gap-3">
-                  <Link href="/signup">
-                    <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold px-8 py-4">
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <Link href="/signup" className="w-full sm:w-auto">
+                    <Button className="w-full sm:w-auto bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white font-semibold px-6 sm:px-8 py-3 sm:py-4 min-h-[44px]">
                       Get Started Free
                     </Button>
                   </Link>
-                  <Link href="/login">
-                    <Button variant="outline" className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 font-semibold px-8 py-4">
+                  <Link href="/login" className="w-full sm:w-auto">
+                    <Button variant="outline" className="w-full sm:w-auto border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 font-semibold px-6 sm:px-8 py-3 sm:py-4 min-h-[44px]">
                       Log In
                     </Button>
                   </Link>
@@ -519,20 +535,20 @@ function DiscoverContent() {
       {/* Header */}
       <div className="space-y-4">
         {searchQuery ? (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3">
                 <span>🔍</span>
-                <span>Search Results for "{searchQuery}"</span>
+                <span className="break-words">Search Results for "{searchQuery}"</span>
               </h1>
-              <p className="text-gray-400 mt-1">
+              <p className="text-gray-400 mt-1 text-sm sm:text-base">
                 {searchLoading ? "Searching..." : `${searchResults.length} movie${searchResults.length !== 1 ? 's' : ''} found`}
               </p>
             </div>
             <Button
               onClick={() => window.location.href = '/discover'}
               variant="outline"
-              className="border-white/10 text-white hover:bg-white/10"
+              className="border-white/10 text-white hover:bg-white/10 min-h-[44px] self-start sm:self-auto"
             >
               <X className="w-4 h-4 mr-2" />
               Clear Search
@@ -540,13 +556,13 @@ function DiscoverContent() {
           </div>
         ) : (
           <>
-            <h1 className="text-5xl font-bold text-white flex items-center gap-3">
-              <span className="text-4xl">🎬</span>
+            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-white flex items-center gap-2 sm:gap-3">
+              <span className="text-2xl sm:text-4xl">🎬</span>
               <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                 Discover & Rate Movies
               </span>
             </h1>
-            <p className="text-xl text-gray-400">
+            <p className="text-base sm:text-lg lg:text-xl text-gray-400">
               Personalized recommendations powered by AI
             </p>
           </>
@@ -570,29 +586,36 @@ function DiscoverContent() {
       {!searchQuery && (
         <Card className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 backdrop-blur-sm border-purple-400/30">
           <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
               <div className="flex items-center gap-3">
                 <Sparkles className="w-6 h-6 text-purple-400" />
                 <div>
-                  <h2 className="text-2xl font-bold text-white">AI Recommendations For You</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold text-white">AI Recommendations For You</h2>
                   <p className="text-sm text-gray-400">
-                    {aiLoading ? 'Generating personalized picks...' : `${aiMovies.length} movies curated just for you`}
+                    {aiLoading ? 'Generating personalized picks...' : aiMovies.length > 0 ? `${aiMovies.length} movies curated just for you` : 'Click the button to get personalized picks'}
                   </p>
                 </div>
               </div>
-              {aiMovies.length > 0 && !aiLoading && (
-                <Button
-                  onClick={() => {
-                    setAiMovies([]); // Clear existing movies
-                    loadInitialAIRecommendations(); // Load 6 new ones
-                  }}
-                  disabled={aiLoading}
-                  className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg"
-                >
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Generate More
-                </Button>
-              )}
+              <Button
+                onClick={() => {
+                  setAiMovies([]); // Clear existing movies
+                  loadInitialAIRecommendations(); // Load 6 new ones
+                }}
+                disabled={aiLoading}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-semibold shadow-lg min-h-[44px]"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 mr-2" />
+                    {aiMovies.length > 0 ? 'Refresh Picks' : 'Get AI Picks'}
+                  </>
+                )}
+              </Button>
             </div>
 
             {aiLoading && aiMovies.length === 0 ? (
@@ -600,7 +623,7 @@ function DiscoverContent() {
                 <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
               </div>
             ) : aiMovies.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <AnimatePresence mode="popLayout">
                   {aiMovies.map((movie, idx) => (
                     <AIMovieCard
@@ -614,7 +637,12 @@ function DiscoverContent() {
                   ))}
                 </AnimatePresence>
               </div>
-            ) : null}
+            ) : (
+              <div className="text-center py-12 text-gray-400">
+                <Sparkles className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>Click "Get AI Picks" to receive personalized movie recommendations based on your ratings and preferences.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -679,7 +707,7 @@ function DiscoverContent() {
                 <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
               </div>
             ) : popularMovies.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 <AnimatePresence mode="popLayout">
                   {popularMovies.map((movie, idx) => (
                     <MovieCardWithActions
@@ -741,7 +769,7 @@ function DiscoverContent() {
                 <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
               </div>
             ) : trendingMovies.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 <AnimatePresence mode="popLayout">
                   {trendingMovies.map((movie, idx) => (
                     <MovieCardWithActions

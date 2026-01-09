@@ -1155,36 +1155,36 @@ export default function HomePage() {
 
       {/* Header */}
       <div className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
           <div className="flex-1">
-            <h1 className="text-4xl font-bold text-white flex items-center gap-3">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white flex items-center gap-2 sm:gap-3">
               <span>✨</span>
               <span className="bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent">
                 Discover Your Next Favorite
               </span>
             </h1>
-            <p className="text-gray-400 text-lg mt-2">
+            <p className="text-gray-400 text-sm sm:text-base lg:text-lg mt-2">
               Search for any movie or TV show, explore trending & popular picks, or let AI curate personalized recommendations based on your unique taste!
             </p>
           </div>
           
-          {/* AI Picks Buttons */}
+          {/* AI Picks Buttons - Horizontal on mobile, vertical on desktop */}
           {status === "authenticated" && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-row flex-wrap lg:flex-col gap-2">
               <Button
                 onClick={loadAIRecommendations}
                 disabled={aiLoading}
-                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold px-6 py-4 text-sm shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl border border-cyan-400/20"
+                className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl border border-cyan-400/20 flex-1 lg:flex-none min-h-[44px]"
               >
                 {aiLoading ? (
                   <div className="flex items-center">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    <span>Loading...</span>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Loading...</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <Sparkles className="w-4 h-4" />
-                    <span className="font-bold">AI Picks - Movies</span>
+                    <span className="font-bold whitespace-nowrap">AI Movies</span>
                   </div>
                 )}
               </Button>
@@ -1192,17 +1192,17 @@ export default function HomePage() {
               <Button
                 onClick={loadAITvRecommendations}
                 disabled={aiTvLoading}
-                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-6 py-4 text-sm shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl border border-purple-400/20"
+                className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-bold px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all duration-200 rounded-xl border border-purple-400/20 flex-1 lg:flex-none min-h-[44px]"
               >
                 {aiTvLoading ? (
                   <div className="flex items-center">
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    <span>Loading...</span>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">Loading...</span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2">
                     <Tv className="w-4 h-4" />
-                    <span className="font-bold">AI Picks - TV Shows</span>
+                    <span className="font-bold whitespace-nowrap">AI TV Shows</span>
                   </div>
                 )}
               </Button>
@@ -1211,12 +1211,13 @@ export default function HomePage() {
               <Button
                 onClick={() => setShowFeedbackModal(true)}
                 variant="outline"
-                className="border-amber-400/50 text-amber-300 hover:bg-amber-500/20 font-medium px-4 py-2 text-sm rounded-lg"
+                className="border-amber-400/50 text-amber-300 hover:bg-amber-500/20 font-medium px-3 sm:px-4 py-2 text-xs sm:text-sm rounded-lg min-h-[44px]"
               >
-                <Send className="w-4 h-4 mr-2" />
-                Give AI Feedback
+                <Send className="w-4 h-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Give AI Feedback</span>
+                <span className="sm:hidden">Feedback</span>
                 {userFeedback.length > 0 && (
-                  <span className="ml-2 bg-amber-500 text-black text-xs px-2 py-0.5 rounded-full">
+                  <span className="ml-1 sm:ml-2 bg-amber-500 text-black text-xs px-2 py-0.5 rounded-full">
                     {userFeedback.length}
                   </span>
                 )}
@@ -1348,20 +1349,20 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="relative px-12">
-                {/* Left Arrow */}
+              <div className="relative px-0 sm:px-8 lg:px-12">
+                {/* Left Arrow - Hidden on mobile, shown on larger screens */}
                 {aiIndex > 0 && (
                   <button
                     onClick={handleAIPrev}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Previous movies"
                   >
-                    <ChevronLeft className="w-6 h-6" />
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
                 {/* Movies Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   <AnimatePresence mode="wait">
                     {aiMovies.slice(aiIndex, aiIndex + 3).map((movie, idx) => (
                       <motion.div
@@ -1384,19 +1385,39 @@ export default function HomePage() {
                   </AnimatePresence>
                 </div>
 
-                {/* Right Arrow */}
+                {/* Right Arrow - Hidden on mobile */}
                 {aiIndex + 3 < aiMovies.length && (
                   <button
                     onClick={handleAINext}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Next movies"
                   >
-                    <ChevronRight className="w-6 h-6" />
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
-                {/* Debug Info */}
-                <div className="text-center mt-4 text-sm text-gray-400">
+                {/* Mobile Pagination Controls */}
+                <div className="flex sm:hidden justify-center gap-4 mt-4">
+                  <button
+                    onClick={handleAIPrev}
+                    disabled={aiIndex === 0}
+                    className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Previous movies"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleAINext}
+                    disabled={aiIndex + 3 >= aiMovies.length}
+                    className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Next movies"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Page Info */}
+                <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
                   Showing {aiIndex + 1}-{Math.min(aiIndex + 3, aiMovies.length)} of {aiMovies.length} movies
                 </div>
               </div>
@@ -1474,20 +1495,20 @@ export default function HomePage() {
                 </div>
               )}
 
-              <div className="relative px-12">
-                {/* Left Arrow */}
+              <div className="relative px-0 sm:px-8 lg:px-12">
+                {/* Left Arrow - Hidden on mobile */}
                 {aiTvIndex > 0 && (
                   <button
                     onClick={handleAITvPrev}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Previous TV shows"
                   >
-                    <ChevronLeft className="w-6 h-6" />
+                    <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
                 {/* TV Shows Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                   <AnimatePresence mode="wait">
                     {aiTvShows.slice(aiTvIndex, aiTvIndex + 3).map((tvShow, idx) => (
                       <motion.div
@@ -1509,19 +1530,39 @@ export default function HomePage() {
                   </AnimatePresence>
                 </div>
 
-                {/* Right Arrow */}
+                {/* Right Arrow - Hidden on mobile */}
                 {aiTvIndex + 3 < aiTvShows.length && (
                   <button
                     onClick={handleAITvNext}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                     aria-label="Next TV shows"
                   >
-                    <ChevronRight className="w-6 h-6" />
+                    <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
                 )}
 
-                {/* Debug Info */}
-                <div className="text-center mt-4 text-sm text-gray-400">
+                {/* Mobile Pagination Controls */}
+                <div className="flex sm:hidden justify-center gap-4 mt-4">
+                  <button
+                    onClick={handleAITvPrev}
+                    disabled={aiTvIndex === 0}
+                    className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Previous TV shows"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={handleAITvNext}
+                    disabled={aiTvIndex + 3 >= aiTvShows.length}
+                    className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                    aria-label="Next TV shows"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Page Info */}
+                <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
                   Showing {aiTvIndex + 1}-{Math.min(aiTvIndex + 3, aiTvShows.length)} of {aiTvShows.length} TV shows
                 </div>
               </div>
@@ -1619,20 +1660,20 @@ export default function HomePage() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="relative px-12">
-                  {/* Left Arrow */}
+                <div className="relative px-0 sm:px-8 lg:px-12">
+                  {/* Left Arrow - Hidden on mobile */}
                   {searchIndex > 0 && (
                     <button
                       onClick={handleSearchPrev}
-                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                      className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                       aria-label="Previous results"
                     >
-                      <ChevronLeft className="w-6 h-6" />
+                      <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
                   )}
 
                   {/* Results Grid - Show 3 at a time */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     <AnimatePresence mode="wait">
                       {searchResults.slice(searchIndex, searchIndex + 3).map((movie, idx) => (
                         <motion.div
@@ -1656,19 +1697,39 @@ export default function HomePage() {
                     </AnimatePresence>
                   </div>
 
-                  {/* Right Arrow */}
+                  {/* Right Arrow - Hidden on mobile */}
                   {searchIndex + 3 < searchResults.length && (
                     <button
                       onClick={handleSearchNext}
-                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                      className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                       aria-label="Next results"
                     >
-                      <ChevronRight className="w-6 h-6" />
+                      <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
                   )}
 
-                  {/* Debug Info */}
-                  <div className="text-center mt-4 text-sm text-gray-400">
+                  {/* Mobile Pagination Controls */}
+                  <div className="flex sm:hidden justify-center gap-4 mt-4">
+                    <button
+                      onClick={handleSearchPrev}
+                      disabled={searchIndex === 0}
+                      className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                      aria-label="Previous results"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={handleSearchNext}
+                      disabled={searchIndex + 3 >= searchResults.length}
+                      className="p-3 rounded-full bg-purple-500/90 hover:bg-purple-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                      aria-label="Next results"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  {/* Page Info */}
+                  <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
                     Showing {searchIndex + 1}-{Math.min(searchIndex + 3, searchResults.length)} of {searchResults.length} results
                   </div>
                 </div>
@@ -1718,20 +1779,20 @@ export default function HomePage() {
               <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
             </div>
           ) : trendingMovies.length > 0 ? (
-            <div className="relative px-12">
-              {/* Left Arrow */}
+            <div className="relative px-0 sm:px-8 lg:px-12">
+              {/* Left Arrow - Hidden on mobile */}
               {trendingIndex > 0 && (
                 <button
                   onClick={handleTrendingPrev}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                   aria-label="Previous movies"
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
               {/* Movies Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <AnimatePresence mode="wait">
                   {trendingMovies.slice(trendingIndex, trendingIndex + 3).map((movie, idx) => (
                     <motion.div
@@ -1754,20 +1815,40 @@ export default function HomePage() {
                 </AnimatePresence>
               </div>
 
-              {/* Right Arrow */}
+              {/* Right Arrow - Hidden on mobile */}
               {trendingIndex + 3 < trendingMovies.length && (
                 <button
                   onClick={handleTrendingNext}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                   aria-label="Next movies"
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
-              {/* Debug Info */}
-              <div className="text-center mt-4 text-sm text-gray-400">
-                Showing {trendingIndex + 1}-{Math.min(trendingIndex + 4, trendingMovies.length)} of {trendingMovies.length} movies
+              {/* Mobile Pagination Controls */}
+              <div className="flex sm:hidden justify-center gap-4 mt-4">
+                <button
+                  onClick={handleTrendingPrev}
+                  disabled={trendingIndex === 0}
+                  className="p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                  aria-label="Previous movies"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleTrendingNext}
+                  disabled={trendingIndex + 3 >= trendingMovies.length}
+                  className="p-3 rounded-full bg-cyan-500/90 hover:bg-cyan-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                  aria-label="Next movies"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Page Info */}
+              <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
+                Showing {trendingIndex + 1}-{Math.min(trendingIndex + 3, trendingMovies.length)} of {trendingMovies.length} movies
               </div>
             </div>
           ) : null}
@@ -1832,20 +1913,20 @@ export default function HomePage() {
               <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
             </div>
           ) : popularMovies.length > 0 ? (
-            <div className="relative px-12">
-              {/* Left Arrow */}
+            <div className="relative px-0 sm:px-8 lg:px-12">
+              {/* Left Arrow - Hidden on mobile */}
               {popularIndex > 0 && (
                 <button
                   onClick={handlePopularPrev}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                   aria-label="Previous movies"
                 >
-                  <ChevronLeft className="w-6 h-6" />
+                  <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
               {/* Movies Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                 <AnimatePresence mode="wait">
                   {popularMovies.slice(popularIndex, popularIndex + 3).map((movie, idx) => (
                     <motion.div
@@ -1868,20 +1949,40 @@ export default function HomePage() {
                 </AnimatePresence>
               </div>
 
-              {/* Right Arrow */}
+              {/* Right Arrow - Hidden on mobile */}
               {popularIndex + 3 < popularMovies.length && (
                 <button
                   onClick={handlePopularNext}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-2 sm:p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white shadow-xl hover:shadow-2xl transition-all duration-200 hover:scale-110 active:scale-95 hidden sm:flex"
                   aria-label="Next movies"
                 >
-                  <ChevronRight className="w-6 h-6" />
+                  <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6" />
                 </button>
               )}
 
-              {/* Debug Info */}
-              <div className="text-center mt-4 text-sm text-gray-400">
-                Showing {popularIndex + 1}-{Math.min(popularIndex + 4, popularMovies.length)} of {popularMovies.length} movies
+              {/* Mobile Pagination Controls */}
+              <div className="flex sm:hidden justify-center gap-4 mt-4">
+                <button
+                  onClick={handlePopularPrev}
+                  disabled={popularIndex === 0}
+                  className="p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                  aria-label="Previous movies"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handlePopularNext}
+                  disabled={popularIndex + 3 >= popularMovies.length}
+                  className="p-3 rounded-full bg-orange-500/90 hover:bg-orange-400 text-white disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px] min-w-[44px]"
+                  aria-label="Next movies"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Page Info */}
+              <div className="text-center mt-4 text-xs sm:text-sm text-gray-400">
+                Showing {popularIndex + 1}-{Math.min(popularIndex + 3, popularMovies.length)} of {popularMovies.length} movies
               </div>
             </div>
           ) : null}

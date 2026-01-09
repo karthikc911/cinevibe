@@ -301,21 +301,21 @@ export default function WatchlistPage() {
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-4xl font-bold text-white">My Watchlist</h1>
-          <Badge className="bg-cyan-500 text-black">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white">My Watchlist</h1>
+          <Badge className="bg-cyan-500 text-black text-xs sm:text-sm">
             {totalCount} {totalCount === 1 ? "item" : "items"}
           </Badge>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-white/10">
+      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-white/10 scrollbar-hide">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1 sm:gap-2 min-h-[44px] ${
               activeTab === tab.id
                 ? "bg-cyan-500 text-black"
                 : "bg-white/5 text-gray-300 hover:bg-white/10"
@@ -358,14 +358,14 @@ export default function WatchlistPage() {
                   Movies ({filteredMovies.length})
                 </h2>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {filteredMovies.map((movie, idx) => (
                   <motion.div
                     key={movie.id}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.05 }}
-                    className="space-y-3"
+                    className="space-y-2 sm:space-y-3"
                   >
                     <MovieCard
                       movie={movie}
@@ -374,16 +374,16 @@ export default function WatchlistPage() {
                     />
                     
                     {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 sm:gap-2 flex-wrap">
                       <Button
                         size="sm"
                         variant={watchedIds.has(movie.id) ? "default" : "outline"}
                         onClick={() => toggleWatched(movie.id)}
-                        className={
+                        className={`flex-1 min-h-[44px] text-xs sm:text-sm ${
                           watchedIds.has(movie.id)
-                            ? "flex-1 bg-green-500 hover:bg-green-400 text-black"
-                            : "flex-1 border-white/20 text-white hover:bg-white/10"
-                        }
+                            ? "bg-green-500 hover:bg-green-400 text-black"
+                            : "border-white/20 text-white hover:bg-white/10"
+                        }`}
                         data-testid={`watched-${movie.id}`}
                       >
                         {watchedIds.has(movie.id) ? "✓ Watched" : "Mark Watched"}
@@ -392,7 +392,7 @@ export default function WatchlistPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleShare(movie)}
-                        className="border-cyan-400/50 text-cyan-400 hover:bg-cyan-400/10"
+                        className="border-cyan-400/50 text-cyan-400 hover:bg-cyan-400/10 min-h-[44px] min-w-[44px]"
                         data-testid={`share-${movie.id}`}
                       >
                         <Send className="w-4 h-4" />
@@ -401,10 +401,11 @@ export default function WatchlistPage() {
                         size="sm"
                         variant="outline"
                         onClick={() => handleRemoveMovie(movie.id)}
-                        className="border-red-400/50 text-red-400 hover:bg-red-400/10"
+                        className="border-red-400/50 text-red-400 hover:bg-red-400/10 min-h-[44px] text-xs sm:text-sm"
                         data-testid={`remove-${movie.id}`}
                       >
-                        Remove
+                        <span className="hidden sm:inline">Remove</span>
+                        <span className="sm:hidden">✕</span>
                       </Button>
                     </div>
                   </motion.div>
@@ -424,14 +425,14 @@ export default function WatchlistPage() {
               TV Shows ({filteredTvShows.length})
             </h2>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
             {filteredTvShows.map((tvShow, idx) => (
               <motion.div
                 key={tvShow.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                className="space-y-3"
+                className="space-y-2 sm:space-y-3"
               >
                     <MovieCard
                       movie={tvShow as any}
@@ -439,16 +440,16 @@ export default function WatchlistPage() {
                     />
                 
                 {/* Action Buttons */}
-                <div className="flex gap-2">
+                <div className="flex gap-1 sm:gap-2 flex-wrap">
                   <Button
                     size="sm"
                     variant={watchedIds.has(tvShow.id) ? "default" : "outline"}
                     onClick={() => toggleWatched(tvShow.id)}
-                    className={
+                    className={`flex-1 min-h-[44px] text-xs sm:text-sm ${
                       watchedIds.has(tvShow.id)
-                        ? "flex-1 bg-green-500 hover:bg-green-400 text-black"
-                        : "flex-1 border-white/20 text-white hover:bg-white/10"
-                    }
+                        ? "bg-green-500 hover:bg-green-400 text-black"
+                        : "border-white/20 text-white hover:bg-white/10"
+                    }`}
                   >
                     {watchedIds.has(tvShow.id) ? "✓ Watched" : "Mark Watched"}
                   </Button>
@@ -456,9 +457,10 @@ export default function WatchlistPage() {
                     size="sm"
                     variant="outline"
                     onClick={() => handleRemoveTvShow(tvShow.id)}
-                    className="border-red-400/50 text-red-400 hover:bg-red-400/10"
+                    className="border-red-400/50 text-red-400 hover:bg-red-400/10 min-h-[44px] text-xs sm:text-sm"
                   >
-                    Remove
+                    <span className="hidden sm:inline">Remove</span>
+                    <span className="sm:hidden">✕</span>
                   </Button>
                 </div>
               </motion.div>

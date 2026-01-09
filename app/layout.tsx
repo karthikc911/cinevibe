@@ -26,7 +26,7 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   title: "CineVibe - Your Movie Taste, Powered by Vibes",
   description: "Discover and rate movies with AI-powered personalized recommendations. Find your next favorite film with CineVibe.",
-  manifest: "/manifest.json",
+  manifest: "/manifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
