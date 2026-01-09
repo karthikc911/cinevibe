@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Search, UserPlus, Users, Check, X, User, Mail, Film, MessageCircle, Star, Tv, LogIn } from 'lucide-react-native';
 import { Colors, TMDB_IMAGE_BASE, LanguageNames } from '../../lib/constants';
 import { useAppStore } from '../../lib/store';
@@ -21,8 +22,10 @@ import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { runAfterInteractions, pMap, perfLog, FLATLIST_PERF_CONFIG } from '../../lib/perf';
 
 const FRIENDS_CACHE_KEY = 'cache_friends_data';
+const SCREEN_NAME = 'Friends';
 
 interface Friend {
   id: string;
@@ -85,6 +88,128 @@ const LoginPrompt = memo(({ onPress }: { onPress: () => void }) => (
   </View>
 ));
 
+// Memoized friend card
+const FriendCard = memo(({ 
+  item, 
+  onRemove 
+}: { 
+  item: Friend;
+  onRemove: (id: string) => void;
+}) => (
+  <View style={styles.friendCard}>
+    <View style={styles.friendAvatar}>
+      {item.image ? (
+        <Image source={{ uri: item.image }} style={styles.avatarImage} />
+      ) : (
+        <User color={Colors.textSecondary} size={24} />
+      )}
+    </View>
+    <View style={styles.friendInfo}>
+      <Text style={styles.friendName}>{item.name}</Text>
+      <Text style={styles.friendEmail}>{item.email}</Text>
+    </View>
+    <TouchableOpacity
+      style={styles.removeButton}
+      onPress={() => item.friendshipId && onRemove(item.friendshipId)}
+    >
+      <X color={Colors.error} size={20} />
+    </TouchableOpacity>
+  </View>
+));
+
+// Memoized request card
+const RequestCard = memo(({ 
+  item, 
+  onAccept, 
+  onReject 
+}: { 
+  item: FriendRequest;
+  onAccept: (id: string) => void;
+  onReject: (id: string) => void;
+}) => (
+  <View style={styles.requestCard}>
+    <View style={styles.friendAvatar}>
+      {item.user.image ? (
+        <Image source={{ uri: item.user.image }} style={styles.avatarImage} />
+      ) : (
+        <User color={Colors.textSecondary} size={24} />
+      )}
+    </View>
+    <View style={styles.friendInfo}>
+      <Text style={styles.friendName}>{item.user.name}</Text>
+      <Text style={styles.friendEmail}>{item.user.email}</Text>
+    </View>
+    <View style={styles.requestActions}>
+      <TouchableOpacity style={styles.acceptButton} onPress={() => onAccept(item.id)}>
+        <Check color={Colors.success} size={20} />
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.rejectButton} onPress={() => onReject(item.id)}>
+        <X color={Colors.error} size={20} />
+      </TouchableOpacity>
+    </View>
+  </View>
+));
+
+// Memoized recommendation card
+const RecommendationCard = memo(({ item }: { item: MovieRecommendation }) => (
+  <View style={styles.recommendationCard}>
+    {item.poster && (
+      <Image
+        source={{ uri: `${TMDB_IMAGE_BASE}${item.poster}` }}
+        style={styles.moviePoster}
+        contentFit="cover"
+      />
+    )}
+    <View style={styles.recommendationInfo}>
+      <Text style={styles.movieTitle} numberOfLines={2}>{item.movieTitle}</Text>
+      {item.movieYear && <Text style={styles.movieYear}>{item.movieYear}</Text>}
+      <View style={styles.senderInfo}>
+        <Text style={styles.fromText}>From: </Text>
+        <Text style={styles.senderName}>{item.sender.name}</Text>
+      </View>
+      {item.message && <Text style={styles.messageText} numberOfLines={2}>{item.message}</Text>}
+      {item.imdbRating && (
+        <View style={styles.ratingBadge}>
+          <Star color={Colors.warning} size={12} fill={Colors.warning} />
+          <Text style={styles.ratingText}>{item.imdbRating.toFixed(1)}</Text>
+        </View>
+      )}
+    </View>
+  </View>
+));
+
+// Memoized search result card
+const SearchResultCard = memo(({ 
+  item, 
+  onSendRequest 
+}: { 
+  item: Suggestion;
+  onSendRequest: (id: string) => void;
+}) => (
+  <View style={styles.friendCard}>
+    <View style={styles.friendAvatar}>
+      {item.image ? (
+        <Image source={{ uri: item.image }} style={styles.avatarImage} />
+      ) : (
+        <User color={Colors.textSecondary} size={24} />
+      )}
+    </View>
+    <View style={styles.friendInfo}>
+      <Text style={styles.friendName}>{item.name}</Text>
+      <Text style={styles.friendEmail}>{item.email}</Text>
+    </View>
+    {item.friendshipStatus === 'pending' ? (
+      <Text style={styles.pendingText}>Pending</Text>
+    ) : item.friendshipStatus === 'accepted' ? (
+      <Text style={styles.friendsText}>Friends</Text>
+    ) : (
+      <TouchableOpacity style={styles.addButton} onPress={() => onSendRequest(item.id)}>
+        <UserPlus color={Colors.primary} size={20} />
+      </TouchableOpacity>
+    )}
+  </View>
+));
+
 export default function FriendsTabScreen() {
   const router = useRouter();
   const { isAuthenticated, isUsingDemoMode, isSessionRestored } = useAppStore();
@@ -104,11 +229,21 @@ export default function FriendsTabScreen() {
   const isMounted = useRef(true);
   const hasLoaded = useRef(false);
   const loadSessionRef = useRef(0);
+  const loadingLoggedRef = useRef(false);
+
+  // Log screen focus
+  useFocusEffect(
+    useCallback(() => {
+      perfLog.focus(SCREEN_NAME);
+      return () => {};
+    }, [])
+  );
 
   // Load data function - runs in background
   const loadData = useCallback(async (isRefresh = false) => {
     const currentSession = ++loadSessionRef.current;
     const isSessionValid = () => isMounted.current && loadSessionRef.current === currentSession;
+    const endTimer = perfLog.startTimer(`${SCREEN_NAME} loadData`);
     
     if (isUsingDemoMode) {
       setFriends([{ id: '1', name: 'Demo Friend', email: 'friend@demo.com' }]);
@@ -116,77 +251,103 @@ export default function FriendsTabScreen() {
       setMovieRecommendations([]);
       setDataLoading(false);
       setRefreshing(false);
+      endTimer();
       return;
     }
 
     // Show cached data IMMEDIATELY
     if (!isRefresh) {
+      perfLog.dataLoad(SCREEN_NAME, 'cache', 'start');
       try {
         const cached = await AsyncStorage.getItem(FRIENDS_CACHE_KEY);
-        if (!isSessionValid()) return;
+        if (!isSessionValid()) { endTimer(); return; }
         if (cached) {
           const { friends: f, requests: r, recommendations: rec } = JSON.parse(cached);
+          const totalCount = (f?.length || 0) + (r?.length || 0) + (rec?.length || 0);
+          perfLog.dataLoad(SCREEN_NAME, 'cache', 'end', totalCount);
           if (f?.length > 0) setFriends(f);
           if (r?.length > 0) setReceivedRequests(r);
           if (rec?.length > 0) setMovieRecommendations(rec);
           setDataLoading(false);
         }
-      } catch (e) {}
+      } catch (e) {
+        perfLog.dataLoad(SCREEN_NAME, 'cache', 'end', 0);
+      }
     }
 
-    // Fetch fresh data
+    // Fetch fresh data - basic lists only
     try {
+      perfLog.dataLoad(SCREEN_NAME, 'network', 'start');
       const [friendsData, requestsData, recommendationsData] = await Promise.all([
         friendsApi.getFriends().catch(() => []),
         friendsApi.getPendingRequests().catch(() => ({ received: [], sent: [] })),
         friendsApi.getRecommendations().catch(() => ({ received: [], sent: [] })),
       ]);
 
-      if (!isSessionValid()) return;
+      if (!isSessionValid()) { endTimer(); return; }
       
+      const receivedRecs = (recommendationsData?.received || []).slice(0, 10);
+      const networkCount = (friendsData?.length || 0) + (requestsData?.received?.length || 0) + receivedRecs.length;
+      perfLog.dataLoad(SCREEN_NAME, 'network', 'end', networkCount);
+      
+      // Render friends and requests IMMEDIATELY (no enrichment)
       setFriends(friendsData || []);
       setReceivedRequests(requestsData?.received || []);
+      setMovieRecommendations(receivedRecs);
       
-      // Fetch movie details with timeout
-      const receivedRecs = (recommendationsData?.received || []).slice(0, 10);
-      const recsWithDetails: MovieRecommendation[] = [];
+      // UI is now responsive - turn off loading BEFORE enrichment
+      setDataLoading(false);
+      setRefreshing(false);
+      endTimer();
       
-      for (const rec of receivedRecs) {
+      // Enrich recommendations AFTER navigation completes (non-blocking)
+      runAfterInteractions(async () => {
         if (!isSessionValid()) return;
-        try {
-          const movieDetails = await Promise.race([
-            moviesApi.getMovieDetails(rec.movieId),
-            new Promise((_, reject) => setTimeout(() => reject(), 2000))
-          ]) as any;
-          recsWithDetails.push({
-            ...rec,
-            poster: movieDetails?.poster,
-            lang: movieDetails?.lang,
-            imdbRating: movieDetails?.imdb || movieDetails?.imdbRating,
-            genres: movieDetails?.genres,
-            summary: movieDetails?.summary || movieDetails?.overview,
-          });
-        } catch {
-          recsWithDetails.push(rec);
-        }
-      }
-      
-      if (!isSessionValid()) return;
-      setMovieRecommendations(recsWithDetails);
-      
-      // Cache data (fire and forget)
-      AsyncStorage.setItem(FRIENDS_CACHE_KEY, JSON.stringify({
-        friends: friendsData || [],
-        requests: requestsData?.received || [],
-        recommendations: recsWithDetails,
-      })).catch(() => {});
+        perfLog.dataLoad(SCREEN_NAME, 'enrich', 'start');
+
+        // Enrich recommendations in parallel with concurrency limit
+        const recsWithDetails = await pMap(
+          receivedRecs,
+          async (rec: MovieRecommendation) => {
+            if (!isSessionValid()) return rec;
+
+            try {
+              const movieDetails = await Promise.race([
+                moviesApi.getMovieDetails(rec.movieId),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+              ]) as any;
+
+              return {
+                ...rec,
+                poster: movieDetails?.poster,
+                lang: movieDetails?.lang,
+                imdbRating: movieDetails?.imdb || movieDetails?.imdbRating,
+                genres: movieDetails?.genres,
+                summary: movieDetails?.summary || movieDetails?.overview,
+              };
+            } catch {
+              return rec;
+            }
+          },
+          5 // concurrency limit
+        );
+
+        if (!isSessionValid()) return;
+        setMovieRecommendations(recsWithDetails);
+        perfLog.dataLoad(SCREEN_NAME, 'enrich', 'end', recsWithDetails.length);
+
+        // Cache enriched data (fire and forget)
+        AsyncStorage.setItem(FRIENDS_CACHE_KEY, JSON.stringify({
+          friends: friendsData || [],
+          requests: requestsData?.received || [],
+          recommendations: recsWithDetails,
+        })).catch(() => {});
+      });
     } catch (error) {
       console.error('[FRIENDS] Error:', error);
-    } finally {
-      if (isSessionValid()) {
-        setDataLoading(false);
-        setRefreshing(false);
-      }
+      setDataLoading(false);
+      setRefreshing(false);
+      endTimer();
     }
   }, [isUsingDemoMode]);
 
@@ -197,24 +358,19 @@ export default function FriendsTabScreen() {
     if (isSessionRestored && isAuthenticated) {
       if (!hasLoaded.current) {
         hasLoaded.current = true;
-        // Keep dataLoading true and load data
         // Double requestAnimationFrame GUARANTEES a paint has occurred
-        // First rAF: Browser commits the frame with loading screen
-        // Second rAF: Now we can safely load data
+        // This ensures the loading spinner renders before heavy work starts
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (isMounted.current) loadData();
           });
         });
       } else {
-        // Already loaded, turn off loading
         setDataLoading(false);
       }
     } else if (isSessionRestored && !isAuthenticated) {
-      // Not authenticated, no need to show loading
       setDataLoading(false);
     }
-    // If session not restored yet, keep showing loading
     
     return () => {
       loadSessionRef.current++;
@@ -222,12 +378,12 @@ export default function FriendsTabScreen() {
     };
   }, [isSessionRestored, isAuthenticated, loadData]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadData(true);
-  };
+  }, [loadData]);
 
-  const handleSearch = async () => {
+  const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
     try {
@@ -238,9 +394,9 @@ export default function FriendsTabScreen() {
     } finally {
       setSearching(false);
     }
-  };
+  }, [searchQuery]);
 
-  const handleSendRequest = async (userId: string) => {
+  const handleSendRequest = useCallback(async (userId: string) => {
     try {
       await friendsApi.sendFriendRequest(userId);
       Alert.alert('Success', 'Friend request sent!');
@@ -250,9 +406,9 @@ export default function FriendsTabScreen() {
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to send request');
     }
-  };
+  }, []);
 
-  const handleAcceptRequest = async (requestId: string) => {
+  const handleAcceptRequest = useCallback(async (requestId: string) => {
     try {
       await friendsApi.acceptFriendRequest(requestId);
       setReceivedRequests(prev => prev.filter(r => r.id !== requestId));
@@ -260,18 +416,18 @@ export default function FriendsTabScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to accept request');
     }
-  };
+  }, [loadData]);
 
-  const handleRejectRequest = async (requestId: string) => {
+  const handleRejectRequest = useCallback(async (requestId: string) => {
     try {
       await friendsApi.rejectFriendRequest(requestId);
       setReceivedRequests(prev => prev.filter(r => r.id !== requestId));
     } catch (error) {
       Alert.alert('Error', 'Failed to reject request');
     }
-  };
+  }, []);
 
-  const handleRemoveFriend = async (friendshipId: string) => {
+  const handleRemoveFriend = useCallback(async (friendshipId: string) => {
     Alert.alert('Remove Friend', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -279,7 +435,6 @@ export default function FriendsTabScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            // Use reject to remove friendship
             await friendsApi.rejectFriendRequest(friendshipId);
             setFriends(prev => prev.filter(f => f.friendshipId !== friendshipId));
           } catch (error) {
@@ -288,10 +443,10 @@ export default function FriendsTabScreen() {
         },
       },
     ]);
-  };
+  }, []);
 
   // Tab renderer
-  const renderTab = (tab: typeof activeTab, label: string, icon: React.ReactNode) => (
+  const renderTab = useCallback((tab: typeof activeTab, label: string, icon: React.ReactNode) => (
     <TouchableOpacity
       style={[styles.tab, activeTab === tab && styles.activeTab]}
       onPress={() => setActiveTab(tab)}
@@ -299,112 +454,33 @@ export default function FriendsTabScreen() {
       {icon}
       <Text style={[styles.tabLabel, activeTab === tab && styles.activeTabLabel]}>{label}</Text>
     </TouchableOpacity>
-  );
+  ), [activeTab]);
 
-  // Friend item renderer
-  const renderFriendItem = ({ item }: { item: Friend }) => (
-    <View style={styles.friendCard}>
-      <View style={styles.friendAvatar}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.avatarImage} />
-        ) : (
-          <User color={Colors.textSecondary} size={24} />
-        )}
-      </View>
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{item.name}</Text>
-        <Text style={styles.friendEmail}>{item.email}</Text>
-      </View>
-      <TouchableOpacity
-        style={styles.removeButton}
-        onPress={() => item.friendshipId && handleRemoveFriend(item.friendshipId)}
-      >
-        <X color={Colors.error} size={20} />
-      </TouchableOpacity>
-    </View>
-  );
+  // Memoized renderItem functions
+  const renderFriendItem = useCallback(({ item }: { item: Friend }) => (
+    <FriendCard item={item} onRemove={handleRemoveFriend} />
+  ), [handleRemoveFriend]);
 
-  // Request item renderer
-  const renderRequestItem = ({ item }: { item: FriendRequest }) => (
-    <View style={styles.requestCard}>
-      <View style={styles.friendAvatar}>
-        {item.user.image ? (
-          <Image source={{ uri: item.user.image }} style={styles.avatarImage} />
-        ) : (
-          <User color={Colors.textSecondary} size={24} />
-        )}
-      </View>
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{item.user.name}</Text>
-        <Text style={styles.friendEmail}>{item.user.email}</Text>
-      </View>
-      <View style={styles.requestActions}>
-        <TouchableOpacity style={styles.acceptButton} onPress={() => handleAcceptRequest(item.id)}>
-          <Check color={Colors.success} size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.rejectButton} onPress={() => handleRejectRequest(item.id)}>
-          <X color={Colors.error} size={20} />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const renderRequestItem = useCallback(({ item }: { item: FriendRequest }) => (
+    <RequestCard item={item} onAccept={handleAcceptRequest} onReject={handleRejectRequest} />
+  ), [handleAcceptRequest, handleRejectRequest]);
 
-  // Search result renderer
-  const renderSearchResult = ({ item }: { item: Suggestion }) => (
-    <View style={styles.friendCard}>
-      <View style={styles.friendAvatar}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.avatarImage} />
-        ) : (
-          <User color={Colors.textSecondary} size={24} />
-        )}
-      </View>
-      <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>{item.name}</Text>
-        <Text style={styles.friendEmail}>{item.email}</Text>
-      </View>
-      {item.friendshipStatus === 'pending' ? (
-        <Text style={styles.pendingText}>Pending</Text>
-      ) : item.friendshipStatus === 'accepted' ? (
-        <Text style={styles.friendsText}>Friends</Text>
-      ) : (
-        <TouchableOpacity style={styles.addButton} onPress={() => handleSendRequest(item.id)}>
-          <UserPlus color={Colors.primary} size={20} />
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const renderRecommendationItem = useCallback(({ item }: { item: MovieRecommendation }) => (
+    <RecommendationCard item={item} />
+  ), []);
 
-  // Recommendation renderer
-  const renderRecommendation = ({ item }: { item: MovieRecommendation }) => (
-    <View style={styles.recommendationCard}>
-      {item.poster && (
-        <Image
-          source={{ uri: `${TMDB_IMAGE_BASE}${item.poster}` }}
-          style={styles.moviePoster}
-          contentFit="cover"
-        />
-      )}
-      <View style={styles.recommendationInfo}>
-        <Text style={styles.movieTitle} numberOfLines={2}>{item.movieTitle}</Text>
-        {item.movieYear && <Text style={styles.movieYear}>{item.movieYear}</Text>}
-        <View style={styles.senderInfo}>
-          <Text style={styles.fromText}>From: </Text>
-          <Text style={styles.senderName}>{item.sender.name}</Text>
-        </View>
-        {item.message && <Text style={styles.messageText} numberOfLines={2}>{item.message}</Text>}
-        {item.imdbRating && (
-          <View style={styles.ratingBadge}>
-            <Star color={Colors.warning} size={12} fill={Colors.warning} />
-            <Text style={styles.ratingText}>{item.imdbRating.toFixed(1)}</Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  const renderSearchResultItem = useCallback(({ item }: { item: Suggestion }) => (
+    <SearchResultCard item={item} onSendRequest={handleSendRequest} />
+  ), [handleSendRequest]);
+
+  // Stable keyExtractors
+  const keyExtractorFriend = useCallback((item: Friend) => item.id, []);
+  const keyExtractorRequest = useCallback((item: FriendRequest) => item.id, []);
+  const keyExtractorRec = useCallback((item: MovieRecommendation) => item.id, []);
+  const keyExtractorSearch = useCallback((item: Suggestion) => item.id, []);
 
   // Content based on active tab
-  const renderContent = () => {
+  const renderContent = useCallback(() => {
     if (dataLoading && !friends.length && !receivedRequests.length) {
       return (
         <View style={styles.loadingContainer}>
@@ -425,12 +501,13 @@ export default function FriendsTabScreen() {
         ) : (
           <FlatList
             data={friends}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractorFriend}
             renderItem={renderFriendItem}
             contentContainerStyle={styles.listContent}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
             }
+            {...FLATLIST_PERF_CONFIG}
           />
         );
 
@@ -443,9 +520,10 @@ export default function FriendsTabScreen() {
         ) : (
           <FlatList
             data={receivedRequests}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractorRequest}
             renderItem={renderRequestItem}
             contentContainerStyle={styles.listContent}
+            {...FLATLIST_PERF_CONFIG}
           />
         );
 
@@ -458,9 +536,10 @@ export default function FriendsTabScreen() {
         ) : (
           <FlatList
             data={movieRecommendations}
-            keyExtractor={(item) => item.id}
-            renderItem={renderRecommendation}
+            keyExtractor={keyExtractorRec}
+            renderItem={renderRecommendationItem}
             contentContainerStyle={styles.listContent}
+            {...FLATLIST_PERF_CONFIG}
           />
         );
 
@@ -484,9 +563,10 @@ export default function FriendsTabScreen() {
             {searchResults.length > 0 ? (
               <FlatList
                 data={searchResults}
-                keyExtractor={(item) => item.id}
-                renderItem={renderSearchResult}
+                keyExtractor={keyExtractorSearch}
+                renderItem={renderSearchResultItem}
                 contentContainerStyle={styles.listContent}
+                {...FLATLIST_PERF_CONFIG}
               />
             ) : (
               <View style={styles.emptyState}>
@@ -497,11 +577,21 @@ export default function FriendsTabScreen() {
           </View>
         );
     }
-  };
+  }, [
+    activeTab, dataLoading, friends, receivedRequests, movieRecommendations, 
+    searchResults, searchQuery, searching, refreshing,
+    handleRefresh, handleSearch, renderFriendItem, renderRequestItem, 
+    renderRecommendationItem, renderSearchResultItem,
+    keyExtractorFriend, keyExtractorRequest, keyExtractorRec, keyExtractorSearch
+  ]);
 
   // RENDER
   // Show loading while session is being restored
   if (!isSessionRestored) {
+    if (!loadingLoggedRef.current) {
+      loadingLoggedRef.current = true;
+      perfLog.loadingRendered(SCREEN_NAME);
+    }
     return (
       <SafeAreaView style={styles.container}>
         <LoadingSpinner message="Initializing..." />
@@ -520,11 +610,21 @@ export default function FriendsTabScreen() {
 
   // Show full-screen loading while data is loading
   if (dataLoading) {
+    if (!loadingLoggedRef.current) {
+      loadingLoggedRef.current = true;
+      perfLog.loadingRendered(SCREEN_NAME);
+    }
     return (
       <SafeAreaView style={styles.container}>
         <LoadingSpinner message="Loading friends..." />
       </SafeAreaView>
     );
+  }
+
+  // Log content rendered
+  if (loadingLoggedRef.current) {
+    perfLog.contentRendered(SCREEN_NAME);
+    loadingLoggedRef.current = false;
   }
 
   return (

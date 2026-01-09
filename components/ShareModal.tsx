@@ -31,12 +31,19 @@ export function ShareModal({ isOpen, onClose, movieTitle, movieYear, movieId }: 
   useEffect(() => {
     if (isOpen) {
       loadFriends();
+      // Prevent body scroll on mobile
+      document.body.style.overflow = 'hidden';
     } else {
       // Reset state when modal closes
       setSelectedFriends([]);
       setShared(false);
       setMessage("");
+      document.body.style.overflow = '';
     }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
   }, [isOpen]);
 
   const loadFriends = async () => {
@@ -128,139 +135,146 @@ export function ShareModal({ isOpen, onClose, movieTitle, movieYear, movieId }: 
             className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
           />
 
-          {/* Modal */}
+          {/* Modal - Full screen on mobile, centered on desktop */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            initial={{ opacity: 0, scale: 0.95, y: '100%' }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[90%] max-w-md"
+            exit={{ opacity: 0, scale: 0.95, y: '100%' }}
+            transition={{ type: "spring", damping: 25, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:bottom-auto z-50 md:w-[90%] md:max-w-md md:max-h-[85vh]"
           >
-            <div className="bg-gradient-to-br from-gray-900 to-black border border-white/10 rounded-2xl shadow-2xl shadow-cyan-500/20 overflow-hidden">
+            <div className="bg-gradient-to-br from-gray-900 to-black border-t md:border border-white/10 rounded-t-3xl md:rounded-2xl shadow-2xl shadow-cyan-500/20 overflow-hidden flex flex-col max-h-[90vh] md:max-h-[85vh]">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
+              <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-white/10 flex-shrink-0">
                 <h3 className="text-lg font-bold text-white">Share with friends</h3>
                 <button
                   onClick={onClose}
-                  className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors"
+                  className="w-10 h-10 md:w-8 md:h-8 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/20 flex items-center justify-center transition-colors"
+                  aria-label="Close"
                 >
-                  <X className="w-4 h-4 text-gray-400" />
+                  <X className="w-5 h-5 md:w-4 md:h-4 text-gray-400" />
                 </button>
               </div>
 
-              {/* Movie Info */}
-              <div className="px-6 py-3 bg-white/5 border-b border-white/10">
-                <p className="text-sm text-gray-300">
-                  <span className="font-semibold text-white">{movieTitle}</span>
-                  <span className="text-gray-500"> ({movieYear})</span>
-                </p>
-              </div>
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto overscroll-contain">
+                {/* Movie Info */}
+                <div className="px-4 md:px-6 py-3 bg-white/5 border-b border-white/10">
+                  <p className="text-sm text-gray-300">
+                    <span className="font-semibold text-white">{movieTitle}</span>
+                    <span className="text-gray-500"> ({movieYear})</span>
+                  </p>
+                </div>
 
-              {/* Message/Comment Input */}
-              <div className="px-6 py-4 border-b border-white/10">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Add a message (optional)
-                </label>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder={`I think you'll love ${movieTitle}! 🎬`}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none"
-                  rows={3}
-                  maxLength={200}
-                  disabled={sending}
-                />
-                <p className="text-xs text-gray-500 mt-1 text-right">
-                  {message.length}/200
-                </p>
-              </div>
+                {/* Message/Comment Input */}
+                <div className="px-4 md:px-6 py-4 border-b border-white/10">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Add a message (optional)
+                  </label>
+                  <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder={`I think you'll love ${movieTitle}! 🎬`}
+                    className="w-full px-3 py-2.5 md:py-2 bg-white/5 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent resize-none text-base md:text-sm"
+                    rows={3}
+                    maxLength={200}
+                    disabled={sending}
+                  />
+                  <p className="text-xs text-gray-500 mt-1 text-right">
+                    {message.length}/200
+                  </p>
+                </div>
 
-              {/* Friends List */}
-              <div className="px-6 py-4 max-h-[300px] overflow-y-auto">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
-                  </div>
-                ) : friends.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-400 text-sm mb-4">You don't have any friends yet.</p>
-                    <a
-                      href="/friends"
-                      className="text-cyan-400 hover:text-cyan-300 text-sm font-medium"
-                    >
-                      Add friends →
-                    </a>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {friends.map((friend) => {
-                      const isSelected = selectedFriends.includes(friend.id);
-                      return (
-                        <button
-                          key={friend.id}
-                          onClick={() => toggleFriend(friend.id)}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl transition-all ${
-                            isSelected
-                              ? "bg-cyan-500/20 border-2 border-cyan-500"
-                              : "bg-white/5 border-2 border-transparent hover:bg-white/10"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            {/* Avatar */}
-                            <div className="relative">
-                              {friend.image ? (
-                                <img
-                                  src={friend.image}
-                                  alt={friend.name || 'Friend'}
-                                  className="w-12 h-12 rounded-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center font-bold text-black text-sm">
-                                  {getInitials(friend.name)}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Name */}
-                            <div className="text-left">
-                              <p className="font-medium text-white">{friend.name || 'Friend'}</p>
-                              <p className="text-xs text-gray-400">
-                                {friend.email}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Checkbox */}
-                          <div
-                            className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                {/* Friends List */}
+                <div className="px-4 md:px-6 py-4">
+                  {loading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                    </div>
+                  ) : friends.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-gray-400 text-sm mb-4">You don't have any friends yet.</p>
+                      <a
+                        href="/friends"
+                        className="text-cyan-400 hover:text-cyan-300 text-sm font-medium inline-block py-2 px-4 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 transition-colors"
+                      >
+                        Add friends →
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {friends.map((friend) => {
+                        const isSelected = selectedFriends.includes(friend.id);
+                        return (
+                          <button
+                            key={friend.id}
+                            onClick={() => toggleFriend(friend.id)}
+                            className={`w-full flex items-center justify-between p-3 md:p-3 rounded-xl transition-all min-h-[60px] md:min-h-0 ${
                               isSelected
-                                ? "bg-cyan-500 border-cyan-500"
-                                : "border-gray-600"
+                                ? "bg-cyan-500/20 border-2 border-cyan-500"
+                                : "bg-white/5 border-2 border-transparent hover:bg-white/10 active:bg-white/15"
                             }`}
                           >
-                            {isSelected && <Check className="w-4 h-4 text-black" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                            <div className="flex items-center gap-3">
+                              {/* Avatar */}
+                              <div className="relative flex-shrink-0">
+                                {friend.image ? (
+                                  <img
+                                    src={friend.image}
+                                    alt={friend.name || 'Friend'}
+                                    className="w-12 h-12 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 to-blue-500 flex items-center justify-center font-bold text-black text-sm">
+                                    {getInitials(friend.name)}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Name */}
+                              <div className="text-left">
+                                <p className="font-medium text-white text-base md:text-sm">{friend.name || 'Friend'}</p>
+                                <p className="text-xs text-gray-400">
+                                  {friend.email}
+                                </p>
+                              </div>
+                            </div>
+
+                            {/* Checkbox */}
+                            <div
+                              className={`w-7 h-7 md:w-6 md:h-6 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 ${
+                                isSelected
+                                  ? "bg-cyan-500 border-cyan-500"
+                                  : "border-gray-600"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-5 h-5 md:w-4 md:h-4 text-black" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-white/10 flex gap-3">
+              {/* Footer - Sticky at bottom */}
+              <div className="px-4 md:px-6 py-4 border-t border-white/10 flex gap-3 flex-shrink-0 bg-gradient-to-b from-transparent to-black/50"
+                style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+              >
                 <button
                   onClick={onClose}
                   disabled={sending}
-                  className="flex-1 px-4 py-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-3 md:py-2.5 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 text-gray-300 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[48px] md:min-h-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleShare}
                   disabled={selectedFriends.length === 0 || shared || sending || !movieId}
-                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
+                  className={`flex-1 px-4 py-3 md:py-2.5 rounded-lg font-medium transition-all min-h-[48px] md:min-h-0 ${
                     selectedFriends.length > 0 && !shared && !sending && movieId
-                      ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-black hover:shadow-lg hover:shadow-cyan-500/50"
+                      ? "bg-gradient-to-r from-cyan-500 to-blue-500 text-black hover:shadow-lg hover:shadow-cyan-500/50 active:scale-95"
                       : "bg-gray-700 text-gray-500 cursor-not-allowed"
                   }`}
                 >
@@ -286,4 +300,3 @@ export function ShareModal({ isOpen, onClose, movieTitle, movieYear, movieId }: 
     </AnimatePresence>
   );
 }
-

@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { Bookmark, Film, Tv, Star, LogIn } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -24,8 +25,10 @@ import { useAppStore } from '../../lib/store';
 import { Colors, TMDB_IMAGE_BASE, LanguageNames } from '../../lib/constants';
 import { WatchlistItem, TvShowWatchlistItem, Movie, TvShow } from '../../lib/types';
 import { movieWatchlistCache, tvShowWatchlistCache, movieDetailsCache, tvShowDetailsCache } from '../../lib/cache';
+import { runAfterInteractions, pMap, perfLog, FLATLIST_PERF_CONFIG } from '../../lib/perf';
 
 const { width } = Dimensions.get('window');
+const SCREEN_NAME = 'Watchlist';
 
 type WatchlistTab = 'movies' | 'tvshows';
 
@@ -65,6 +68,74 @@ const LoginPrompt = memo(({ onPress }: { onPress: () => void }) => (
   </View>
 ));
 
+// Memoized card component for better FlatList performance
+const WatchlistCard = memo(({ 
+  item, 
+  isTV, 
+  onPress 
+}: { 
+  item: EnrichedWatchlistItem; 
+  isTV: boolean;
+  onPress: () => void;
+}) => {
+  const posterUrl = item.poster?.startsWith('http') ? item.poster : item.poster ? `${TMDB_IMAGE_BASE}${item.poster}` : null;
+  const lang = item.lang ? LanguageNames[item.lang] || item.lang.toUpperCase() : 'N/A';
+  const imdbRating = item.imdb || item.imdbRating;
+
+  const formatRating = (rating: number | string | undefined) => {
+    if (!rating) return null;
+    const num = typeof rating === 'string' ? parseFloat(rating) : rating;
+    return num.toFixed(1);
+  };
+
+  return (
+    <TouchableOpacity style={styles.cardContainer} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.posterSection}>
+        {posterUrl ? (
+          <Image source={{ uri: posterUrl }} style={styles.poster} contentFit="cover" />
+        ) : (
+          <View style={styles.noPoster}>
+            <Text style={styles.noPosterEmoji}>🎬</Text>
+          </View>
+        )}
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.posterGradient} />
+        <View style={styles.languageBadge}>
+          <Text style={styles.badgeText}>{lang}</Text>
+        </View>
+        <View style={[styles.typeBadge, isTV ? styles.typeBadgeTV : styles.typeBadgeMovie]}>
+          {isTV ? <Tv color="#fff" size={10} /> : <Film color="#fff" size={10} />}
+          <Text style={styles.badgeText}>{isTV ? 'TV' : 'Movie'}</Text>
+        </View>
+      </View>
+
+      <View style={styles.contentSection}>
+        <Text style={styles.title} numberOfLines={2}>{item.movieTitle}</Text>
+        
+        <View style={styles.metaRow}>
+          {(item.year || item.movieYear) && <Text style={styles.year}>{item.year || item.movieYear}</Text>}
+          {item.genres && item.genres.length > 0 && (
+            <Text style={styles.genres} numberOfLines={1}>• {item.genres.slice(0, 2).join(', ')}</Text>
+          )}
+        </View>
+
+        {imdbRating && (
+          <View style={styles.ratingContainer}>
+            <Star color="#fbbf24" size={14} fill="#fbbf24" />
+            <Text style={styles.ratingText}>{formatRating(imdbRating)}/10</Text>
+            <Text style={styles.imdbLabel}>IMDB</Text>
+          </View>
+        )}
+
+        {(item.summary || item.overview) && (
+          <Text style={styles.summary} numberOfLines={2}>{String(item.summary || item.overview)}</Text>
+        )}
+
+        <Text style={styles.tapHint}>Tap for details →</Text>
+      </View>
+    </TouchableOpacity>
+  );
+});
+
 export default function WatchlistScreen() {
   const router = useRouter();
   const { isAuthenticated, isUsingDemoMode, isSessionRestored } = useAppStore();
@@ -82,27 +153,43 @@ export default function WatchlistScreen() {
   const isMounted = useRef(true);
   const hasLoaded = useRef(false);
   const loadSessionRef = useRef(0);
+  const loadingLoggedRef = useRef(false);
+
+  // Log screen focus
+  useFocusEffect(
+    useCallback(() => {
+      perfLog.focus(SCREEN_NAME);
+      return () => {};
+    }, [])
+  );
 
   const loadWatchlist = useCallback(async (isRefresh = false) => {
     const currentSession = ++loadSessionRef.current;
     const isSessionValid = () => isMounted.current && loadSessionRef.current === currentSession;
+    const endTimer = perfLog.startTimer(`${SCREEN_NAME} loadWatchlist`);
     
     if (isUsingDemoMode) {
       setMovieItems([]);
       setTvItems([]);
       setDataLoading(false);
       setRefreshing(false);
+      endTimer();
       return;
     }
 
     // Show cached data IMMEDIATELY
     if (!isRefresh) {
+      perfLog.dataLoad(SCREEN_NAME, 'cache', 'start');
       const [cachedMovies, cachedTvShows] = await Promise.all([
         movieWatchlistCache.get(),
         tvShowWatchlistCache.get(),
       ]);
 
-      if (!isSessionValid()) return;
+      if (!isSessionValid()) { endTimer(); return; }
+
+      const movieCount = cachedMovies.data?.length || 0;
+      const tvCount = cachedTvShows.data?.length || 0;
+      perfLog.dataLoad(SCREEN_NAME, 'cache', 'end', movieCount + tvCount);
 
       if (cachedMovies.data && cachedMovies.data.length > 0) setMovieItems(cachedMovies.data);
       if (cachedTvShows.data && cachedTvShows.data.length > 0) setTvItems(cachedTvShows.data);
@@ -111,137 +198,183 @@ export default function WatchlistScreen() {
         setDataLoading(false);
         if (!cachedMovies.isStale && !cachedTvShows.isStale) {
           setRefreshing(false);
+          endTimer();
           return;
         }
       }
     }
 
-    // Fetch fresh data
+    // Fetch fresh data - basic items only
     try {
+      perfLog.dataLoad(SCREEN_NAME, 'network', 'start');
       const [moviesRes, tvShowsRes] = await Promise.all([
         watchlistApi.getWatchlist().catch(() => []),
         watchlistApi.getTvShowWatchlist().catch(() => []),
       ]);
 
-      if (!isSessionValid()) return;
+      if (!isSessionValid()) { endTimer(); return; }
+      perfLog.dataLoad(SCREEN_NAME, 'network', 'end', (moviesRes?.length || 0) + (tvShowsRes?.length || 0));
 
-      // Enrich movies
-      const enrichedMovies: EnrichedWatchlistItem[] = [];
-      for (const item of (moviesRes || []) as WatchlistItem[]) {
+      // Render BASIC items immediately (no detail enrichment)
+      const basicMovies = (moviesRes || []).map((item: WatchlistItem) => ({
+        ...item,
+        year: item.movieYear,
+      } as EnrichedWatchlistItem));
+
+      const basicTvShows = (tvShowsRes || []).map((item: TvShowWatchlistItem) => ({
+        id: item.id,
+        movieId: item.tvShowId,
+        movieTitle: item.tvShowName,
+        movieYear: item.tvShowYear || 0,
+        addedAt: item.addedAt,
+        year: item.tvShowYear,
+      } as EnrichedWatchlistItem));
+
+      if (!isSessionValid()) { endTimer(); return; }
+      
+      setMovieItems(basicMovies);
+      setTvItems(basicTvShows);
+      
+      // UI is now responsive - turn off loading BEFORE enrichment
+      setDataLoading(false);
+      setRefreshing(false);
+      endTimer();
+
+      // Enrich details AFTER navigation completes (non-blocking)
+      runAfterInteractions(async () => {
         if (!isSessionValid()) return;
-        
-        try {
-          const { data: cachedDetails } = await movieDetailsCache.get(item.movieId);
-          if (cachedDetails) {
-            enrichedMovies.push({
-              ...item,
-              poster: cachedDetails?.poster,
-              lang: cachedDetails?.lang,
-              genres: cachedDetails?.genres,
-              summary: cachedDetails?.summary || cachedDetails?.overview,
-              imdb: cachedDetails?.imdb,
-              imdbRating: cachedDetails?.imdbRating,
-              year: cachedDetails?.year || item.movieYear,
-            });
-            continue;
-          }
+        perfLog.dataLoad(SCREEN_NAME, 'enrich', 'start');
 
-          const details = await Promise.race([
-            moviesApi.getMovieDetails(item.movieId),
-            new Promise((_, reject) => setTimeout(() => reject(), 2000))
-          ]) as any;
-          
-          if (details) movieDetailsCache.set(item.movieId, details).catch(() => {});
+        // Enrich movies in parallel with concurrency limit
+        const enrichedMovies = await pMap(
+          moviesRes || [],
+          async (item: WatchlistItem) => {
+            if (!isSessionValid()) return { ...item, year: item.movieYear } as EnrichedWatchlistItem;
 
-          enrichedMovies.push({
-            ...item,
-            poster: details?.poster,
-            lang: details?.lang,
-            genres: details?.genres,
-            summary: details?.summary || details?.overview,
-            imdb: details?.imdb,
-            imdbRating: details?.imdbRating,
-            year: details?.year || item.movieYear,
-          });
-        } catch {
-          enrichedMovies.push({ ...item, year: item.movieYear } as EnrichedWatchlistItem);
-        }
-      }
+            try {
+              // Check cache first
+              const { data: cachedDetails } = await movieDetailsCache.get(item.movieId);
+              if (cachedDetails) {
+                return {
+                  ...item,
+                  poster: cachedDetails?.poster,
+                  lang: cachedDetails?.lang,
+                  genres: cachedDetails?.genres,
+                  summary: cachedDetails?.summary || cachedDetails?.overview,
+                  imdb: cachedDetails?.imdb,
+                  imdbRating: cachedDetails?.imdbRating,
+                  year: cachedDetails?.year || item.movieYear,
+                };
+              }
 
-      if (!isSessionValid()) return;
-      setMovieItems(enrichedMovies);
+              // Fetch with timeout
+              const details = await Promise.race([
+                moviesApi.getMovieDetails(item.movieId),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+              ]) as any;
+              
+              if (details) movieDetailsCache.set(item.movieId, details).catch(() => {});
 
-      // Enrich TV shows
-      const enrichedTvShows: EnrichedWatchlistItem[] = [];
-      for (const item of (tvShowsRes || []) as TvShowWatchlistItem[]) {
+              return {
+                ...item,
+                poster: details?.poster,
+                lang: details?.lang,
+                genres: details?.genres,
+                summary: details?.summary || details?.overview,
+                imdb: details?.imdb,
+                imdbRating: details?.imdbRating,
+                year: details?.year || item.movieYear,
+              };
+            } catch {
+              return { ...item, year: item.movieYear } as EnrichedWatchlistItem;
+            }
+          },
+          5 // concurrency limit
+        );
+
         if (!isSessionValid()) return;
-        
-        try {
-          const { data: cachedDetails } = await tvShowDetailsCache.get(item.tvShowId);
-          if (cachedDetails) {
-            enrichedTvShows.push({
+        setMovieItems(enrichedMovies);
+        if (enrichedMovies.length > 0) movieWatchlistCache.set(enrichedMovies).catch(() => {});
+
+        // Enrich TV shows in parallel with concurrency limit
+        const enrichedTvShows = await pMap(
+          tvShowsRes || [],
+          async (item: TvShowWatchlistItem) => {
+            if (!isSessionValid()) return {
               id: item.id,
               movieId: item.tvShowId,
               movieTitle: item.tvShowName,
               movieYear: item.tvShowYear || 0,
               addedAt: item.addedAt,
-              poster: cachedDetails?.poster,
-              lang: cachedDetails?.lang,
-              genres: cachedDetails?.genres,
-              summary: cachedDetails?.summary || cachedDetails?.overview,
-              imdb: cachedDetails?.imdb,
-              imdbRating: cachedDetails?.imdbRating,
-              year: cachedDetails?.year || item.tvShowYear,
-            });
-            continue;
-          }
+              year: item.tvShowYear,
+            } as EnrichedWatchlistItem;
 
-          const details = await Promise.race([
-            tvShowsApi.getTvShowDetails(item.tvShowId),
-            new Promise((_, reject) => setTimeout(() => reject(), 2000))
-          ]) as any;
-          
-          if (details) tvShowDetailsCache.set(item.tvShowId, details).catch(() => {});
+            try {
+              // Check cache first
+              const { data: cachedDetails } = await tvShowDetailsCache.get(item.tvShowId);
+              if (cachedDetails) {
+                return {
+                  id: item.id,
+                  movieId: item.tvShowId,
+                  movieTitle: item.tvShowName,
+                  movieYear: item.tvShowYear || 0,
+                  addedAt: item.addedAt,
+                  poster: cachedDetails?.poster,
+                  lang: cachedDetails?.lang,
+                  genres: cachedDetails?.genres,
+                  summary: cachedDetails?.summary || cachedDetails?.overview,
+                  imdb: cachedDetails?.imdb,
+                  imdbRating: cachedDetails?.imdbRating,
+                  year: cachedDetails?.year || item.tvShowYear,
+                };
+              }
 
-          enrichedTvShows.push({
-            id: item.id,
-            movieId: item.tvShowId,
-            movieTitle: item.tvShowName,
-            movieYear: item.tvShowYear || 0,
-            addedAt: item.addedAt,
-            poster: details?.poster,
-            lang: details?.lang,
-            genres: details?.genres,
-            summary: details?.summary || details?.overview,
-            imdb: details?.imdb,
-            imdbRating: details?.imdbRating,
-            year: details?.year || item.tvShowYear,
-          });
-        } catch {
-          enrichedTvShows.push({ 
-            id: item.id,
-            movieId: item.tvShowId, 
-            movieTitle: item.tvShowName,
-            movieYear: item.tvShowYear || 0,
-            addedAt: item.addedAt,
-            year: item.tvShowYear,
-          } as EnrichedWatchlistItem);
-        }
-      }
+              // Fetch with timeout
+              const details = await Promise.race([
+                tvShowsApi.getTvShowDetails(item.tvShowId),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+              ]) as any;
+              
+              if (details) tvShowDetailsCache.set(item.tvShowId, details).catch(() => {});
 
-      if (!isSessionValid()) return;
-      setTvItems(enrichedTvShows);
-      
-      // Cache (fire and forget)
-      if (enrichedMovies.length > 0) movieWatchlistCache.set(enrichedMovies).catch(() => {});
-      if (enrichedTvShows.length > 0) tvShowWatchlistCache.set(enrichedTvShows).catch(() => {});
+              return {
+                id: item.id,
+                movieId: item.tvShowId,
+                movieTitle: item.tvShowName,
+                movieYear: item.tvShowYear || 0,
+                addedAt: item.addedAt,
+                poster: details?.poster,
+                lang: details?.lang,
+                genres: details?.genres,
+                summary: details?.summary || details?.overview,
+                imdb: details?.imdb,
+                imdbRating: details?.imdbRating,
+                year: details?.year || item.tvShowYear,
+              };
+            } catch {
+              return {
+                id: item.id,
+                movieId: item.tvShowId,
+                movieTitle: item.tvShowName,
+                movieYear: item.tvShowYear || 0,
+                addedAt: item.addedAt,
+                year: item.tvShowYear,
+              } as EnrichedWatchlistItem;
+            }
+          },
+          5 // concurrency limit
+        );
+
+        if (!isSessionValid()) return;
+        setTvItems(enrichedTvShows);
+        if (enrichedTvShows.length > 0) tvShowWatchlistCache.set(enrichedTvShows).catch(() => {});
+        perfLog.dataLoad(SCREEN_NAME, 'enrich', 'end', enrichedMovies.length + enrichedTvShows.length);
+      });
     } catch (error) {
       console.error('[WATCHLIST] Error:', error);
-    } finally {
-      if (isSessionValid()) {
-        setDataLoading(false);
-        setRefreshing(false);
-      }
+      setDataLoading(false);
+      setRefreshing(false);
+      endTimer();
     }
   }, [isUsingDemoMode]);
 
@@ -252,24 +385,19 @@ export default function WatchlistScreen() {
     if (isSessionRestored && isAuthenticated) {
       if (!hasLoaded.current) {
         hasLoaded.current = true;
-        // Keep dataLoading true and load data
         // Double requestAnimationFrame GUARANTEES a paint has occurred
-        // First rAF: Browser commits the frame with loading screen
-        // Second rAF: Now we can safely load data
+        // This ensures the loading spinner renders before heavy work starts
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             if (isMounted.current) loadWatchlist();
           });
         });
       } else {
-        // Already loaded, turn off loading
         setDataLoading(false);
       }
     } else if (isSessionRestored && !isAuthenticated) {
-      // Not authenticated, no need to show loading
       setDataLoading(false);
     }
-    // If session not restored yet, keep showing loading
     
     return () => {
       loadSessionRef.current++;
@@ -277,17 +405,17 @@ export default function WatchlistScreen() {
     };
   }, [isSessionRestored, isAuthenticated, loadWatchlist]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setRefreshing(true);
     loadWatchlist(true);
-  };
+  }, [loadWatchlist]);
 
-  const handleCardPress = (item: EnrichedWatchlistItem) => {
+  const handleCardPress = useCallback((item: EnrichedWatchlistItem) => {
     setSelectedItem(item);
     setShowDetailModal(true);
-  };
+  }, []);
 
-  const handleRemove = async (item: EnrichedWatchlistItem, type: WatchlistTab) => {
+  const handleRemove = useCallback(async (item: EnrichedWatchlistItem, type: WatchlistTab) => {
     Alert.alert('Remove from Watchlist', `Remove "${item.movieTitle}"?`, [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -309,74 +437,27 @@ export default function WatchlistScreen() {
         },
       },
     ]);
-  };
+  }, []);
 
-  const handleShare = (item: EnrichedWatchlistItem) => {
+  const handleShare = useCallback((item: EnrichedWatchlistItem) => {
     setSelectedItem(item);
     setShowShareModal(true);
-  };
+  }, []);
 
   const data = activeTab === 'movies' ? movieItems : tvItems;
 
-  const formatRating = (rating: number | string | undefined) => {
-    if (!rating) return null;
-    const num = typeof rating === 'string' ? parseFloat(rating) : rating;
-    return num.toFixed(1);
-  };
+  // Memoized renderItem for FlatList
+  const renderItem = useCallback(({ item }: { item: EnrichedWatchlistItem }) => (
+    <WatchlistCard
+      item={item}
+      isTV={activeTab === 'tvshows'}
+      onPress={() => handleCardPress(item)}
+    />
+  ), [activeTab, handleCardPress]);
 
-  const renderItem = ({ item }: { item: EnrichedWatchlistItem }) => {
-    const posterUrl = item.poster?.startsWith('http') ? item.poster : item.poster ? `${TMDB_IMAGE_BASE}${item.poster}` : null;
-    const lang = item.lang ? LanguageNames[item.lang] || item.lang.toUpperCase() : 'N/A';
-    const imdbRating = item.imdb || item.imdbRating;
-    const isTV = activeTab === 'tvshows';
-
-    return (
-      <TouchableOpacity style={styles.cardContainer} onPress={() => handleCardPress(item)} activeOpacity={0.8}>
-        <View style={styles.posterSection}>
-          {posterUrl ? (
-            <Image source={{ uri: posterUrl }} style={styles.poster} contentFit="cover" />
-          ) : (
-            <View style={styles.noPoster}>
-              <Text style={styles.noPosterEmoji}>🎬</Text>
-            </View>
-          )}
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.8)']} style={styles.posterGradient} />
-          <View style={styles.languageBadge}>
-            <Text style={styles.badgeText}>{lang}</Text>
-          </View>
-          <View style={[styles.typeBadge, isTV ? styles.typeBadgeTV : styles.typeBadgeMovie]}>
-            {isTV ? <Tv color="#fff" size={10} /> : <Film color="#fff" size={10} />}
-            <Text style={styles.badgeText}>{isTV ? 'TV' : 'Movie'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.contentSection}>
-          <Text style={styles.title} numberOfLines={2}>{item.movieTitle}</Text>
-          
-          <View style={styles.metaRow}>
-            {(item.year || item.movieYear) && <Text style={styles.year}>{item.year || item.movieYear}</Text>}
-            {item.genres && item.genres.length > 0 && (
-              <Text style={styles.genres} numberOfLines={1}>• {item.genres.slice(0, 2).join(', ')}</Text>
-            )}
-          </View>
-
-          {imdbRating && (
-            <View style={styles.ratingContainer}>
-              <Star color="#fbbf24" size={14} fill="#fbbf24" />
-              <Text style={styles.ratingText}>{formatRating(imdbRating)}/10</Text>
-              <Text style={styles.imdbLabel}>IMDB</Text>
-            </View>
-          )}
-
-          {(item.summary || item.overview) && (
-            <Text style={styles.summary} numberOfLines={2}>{String(item.summary || item.overview)}</Text>
-          )}
-
-          <Text style={styles.tapHint}>Tap for details →</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  // Stable keyExtractor
+  const keyExtractor = useCallback((item: EnrichedWatchlistItem) => 
+    `${item.id || item.movieId}`, []);
 
   const selectedMovieData: Movie | TvShow | null = selectedItem ? {
     id: selectedItem.movieId,
@@ -396,6 +477,10 @@ export default function WatchlistScreen() {
 
   // Show loading while session is being restored
   if (!isSessionRestored) {
+    if (!loadingLoggedRef.current) {
+      loadingLoggedRef.current = true;
+      perfLog.loadingRendered(SCREEN_NAME);
+    }
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <LoadingSpinner message="Initializing..." />
@@ -414,11 +499,21 @@ export default function WatchlistScreen() {
 
   // Show full-screen loading while data is loading
   if (dataLoading) {
+    if (!loadingLoggedRef.current) {
+      loadingLoggedRef.current = true;
+      perfLog.loadingRendered(SCREEN_NAME);
+    }
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <LoadingSpinner message="Loading watchlist..." />
       </SafeAreaView>
     );
+  }
+
+  // Log content rendered
+  if (loadingLoggedRef.current) {
+    perfLog.contentRendered(SCREEN_NAME);
+    loadingLoggedRef.current = false;
   }
 
   return (
@@ -473,12 +568,13 @@ export default function WatchlistScreen() {
             <FlatList
               data={data}
               renderItem={renderItem}
-              keyExtractor={(item) => `${item.id || item.movieId}`}
+              keyExtractor={keyExtractor}
               contentContainerStyle={styles.list}
               refreshControl={
                 <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
               }
               showsVerticalScrollIndicator={false}
+              {...FLATLIST_PERF_CONFIG}
             />
           )}
         </>

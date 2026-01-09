@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { X, Send, User, Check, MessageCircle } from 'lucide-react-native';
 import { Colors } from '../lib/constants';
 import { friendsApi } from '../lib/api';
 import { Image } from 'expo-image';
+import { runAfterInteractions, perfLog, FLATLIST_PERF_CONFIG } from '../lib/perf';
 
 interface Friend {
   id: string;
@@ -32,6 +33,38 @@ interface ShareMovieModalProps {
   isTV?: boolean;
 }
 
+// Memoized friend item for better FlatList performance
+const FriendItem = memo(({ 
+  item, 
+  isSelected, 
+  onToggle 
+}: { 
+  item: Friend;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+}) => (
+  <TouchableOpacity
+    style={[styles.friendItem, isSelected && styles.friendItemSelected]}
+    onPress={() => onToggle(item.id)}
+    activeOpacity={0.7}
+  >
+    <View style={styles.friendAvatar}>
+      {item.image ? (
+        <Image source={{ uri: item.image }} style={styles.avatarImage} />
+      ) : (
+        <User color={Colors.textSecondary} size={20} />
+      )}
+    </View>
+    <View style={styles.friendInfo}>
+      <Text style={styles.friendName}>{item.name}</Text>
+      <Text style={styles.friendEmail}>{item.email}</Text>
+    </View>
+    <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+      {isSelected && <Check color="#fff" size={16} />}
+    </View>
+  </TouchableOpacity>
+));
+
 export function ShareMovieModal({
   visible,
   onClose,
@@ -45,40 +78,88 @@ export function ShareMovieModal({
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  
+  // Refs for cancellation
+  const isMounted = useRef(true);
+  const loadCancelRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    isMounted.current = true;
+    
     if (visible) {
-      loadFriends();
+      // Reset state IMMEDIATELY - modal renders with loading state
       setSelectedFriends([]);
       setMessage('');
+      setLoading(true);
+      
+      if (__DEV__) {
+        perfLog.focus('ShareMovieModal');
+        perfLog.loadingRendered('ShareMovieModal');
+      }
+      
+      // Fetch friends AFTER modal animation completes (non-blocking)
+      loadCancelRef.current = runAfterInteractions(() => {
+        if (isMounted.current) {
+          loadFriends();
+        }
+      });
+    } else {
+      // Modal closing - cancel any pending load
+      if (loadCancelRef.current) {
+        loadCancelRef.current();
+        loadCancelRef.current = null;
+      }
     }
+    
+    return () => {
+      isMounted.current = false;
+      if (loadCancelRef.current) {
+        loadCancelRef.current();
+        loadCancelRef.current = null;
+      }
+    };
   }, [visible]);
 
   const loadFriends = async () => {
-    setLoading(true);
+    const endTimer = perfLog.startTimer('ShareMovieModal loadFriends');
     try {
       const friendsList = await friendsApi.getFriends();
-      setFriends(friendsList || []);
+      if (isMounted.current) {
+        setFriends(friendsList || []);
+        if (__DEV__) {
+          perfLog.contentRendered('ShareMovieModal');
+        }
+      }
     } catch (error) {
-      console.error('Error loading friends:', error);
+      if (__DEV__) {
+        console.error('[ShareMovieModal] Error loading friends:', error);
+      }
     } finally {
-      setLoading(false);
+      if (isMounted.current) {
+        setLoading(false);
+      }
+      endTimer();
     }
   };
 
   const handleClose = useCallback(() => {
+    // Cancel any pending operations
+    if (loadCancelRef.current) {
+      loadCancelRef.current();
+      loadCancelRef.current = null;
+    }
     onClose();
   }, [onClose]);
 
-  const toggleFriend = (friendId: string) => {
+  const toggleFriend = useCallback((friendId: string) => {
     setSelectedFriends(prev =>
       prev.includes(friendId)
         ? prev.filter(id => id !== friendId)
         : [...prev, friendId]
     );
-  };
+  }, []);
 
-  const handleShare = async () => {
+  const handleShare = useCallback(async () => {
     if (selectedFriends.length === 0) {
       Alert.alert('Select Friends', 'Please select at least one friend to share with.');
       return;
@@ -86,7 +167,6 @@ export function ShareMovieModal({
 
     setSending(true);
     try {
-      // Use the same recommend endpoint for both movies and TV shows
       await friendsApi.recommendMovie(
         selectedFriends, 
         movieId, 
@@ -99,38 +179,26 @@ export function ShareMovieModal({
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to share. Please try again.');
     } finally {
-      setSending(false);
+      if (isMounted.current) {
+        setSending(false);
+      }
     }
-  };
+  }, [selectedFriends, movieId, movieTitle, movieYear, message, onClose]);
 
-  const renderFriend = ({ item }: { item: Friend }) => {
-    const isSelected = selectedFriends.includes(item.id);
-    return (
-      <TouchableOpacity
-        style={[styles.friendItem, isSelected && styles.friendItemSelected]}
-        onPress={() => toggleFriend(item.id)}
-        activeOpacity={0.7}
-      >
-        <View style={styles.friendAvatar}>
-          {item.image ? (
-            <Image source={{ uri: item.image }} style={styles.avatarImage} />
-          ) : (
-            <User color={Colors.textSecondary} size={20} />
-          )}
-        </View>
-        <View style={styles.friendInfo}>
-          <Text style={styles.friendName}>{item.name}</Text>
-          <Text style={styles.friendEmail}>{item.email}</Text>
-        </View>
-        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
-          {isSelected && <Check color="#fff" size={16} />}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  // Memoized renderItem for FlatList
+  const renderFriend = useCallback(({ item }: { item: Friend }) => (
+    <FriendItem
+      item={item}
+      isSelected={selectedFriends.includes(item.id)}
+      onToggle={toggleFriend}
+    />
+  ), [selectedFriends, toggleFriend]);
+
+  // Stable keyExtractor
+  const keyExtractor = useCallback((item: Friend) => item.id, []);
 
   return (
-    <Modal visible={visible} animationType="none" transparent>
+    <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <View style={styles.container}>
           {/* Header */}
@@ -175,16 +243,17 @@ export function ShareMovieModal({
               <FlatList
                 data={friends}
                 renderItem={renderFriend}
-                keyExtractor={item => item.id}
+                keyExtractor={keyExtractor}
                 style={styles.friendsList}
                 contentContainerStyle={styles.friendsListContent}
                 showsVerticalScrollIndicator={false}
+                {...FLATLIST_PERF_CONFIG}
               />
             </>
           )}
 
           {/* Message Input */}
-          {friends.length > 0 && (
+          {friends.length > 0 && !loading && (
             <View style={styles.messageContainer}>
               <MessageCircle color={Colors.textMuted} size={18} />
               <TextInput
@@ -200,7 +269,7 @@ export function ShareMovieModal({
           )}
 
           {/* Share Button */}
-          {friends.length > 0 && (
+          {friends.length > 0 && !loading && (
             <TouchableOpacity
               style={[
                 styles.shareButton,
@@ -411,4 +480,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-

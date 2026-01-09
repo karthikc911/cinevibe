@@ -16,7 +16,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cinevibe.movieapp",
-      "buildNumber": "31",
+      "buildNumber": "33",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
